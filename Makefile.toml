@@ -1,0 +1,18 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.build-client]
+description = "Build the usermode client for Sanctum."
+command = "cargo"
+args = ["build", "-p", "um_engine"]
+
+[tasks.build-client-release]
+description = "Build the usermode client for Sanctum."
+command = "cargo"
+args = ["build", "--release", "-p", "um_engine"]
+
+
+[tasks.clean-client]
+description = "Clean the usermode client for Sanctum."
+command = "cargo"
+args = ["clean", "-p", "um_engine"]

@@ -1,0 +1,20 @@
+{
+    "rust-analyzer.cargo.target": "x86_64-pc-windows-msvc",
+    //"rust-analyzer.checkOnSave.command": "clippy",
+
+    "cSpell.words": [
+        "Addreg",
+        "ASSOCSERVICE",
+        "libcore",
+        "ntddk",
+        "NTSTATUS",
+        "PCUNICODE",
+        "PCWSTR",
+        "PDRIVER",
+        "println",
+        "PWSTR",
+        "SPSVCINST",
+        "symlnk",
+        "usermode"
+    ]
+}
