@@ -10,10 +10,12 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use ffi::IoGetCurrentIrpStackLocation;
-use shared::constants::{DEVICE_NAME_PATH, SYMBOLIC_NAME_PATH};
+use core::ptr::null_mut;
+
+use ffi::{IoCreateDriver, IoGetCurrentIrpStackLocation};
+use shared::constants::{DEVICE_NAME_PATH, DRIVER_NAME, SYMBOLIC_NAME_PATH};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
-use wdk::println;
+use wdk::{nt_success, println};
 #[cfg(not(test))]
 use wdk_alloc::WdkAllocator;
 
@@ -21,9 +23,7 @@ mod ffi;
 mod utils;
 
 use wdk_sys::{
-    ntddk::{IoCreateSymbolicLink, IoDeleteSymbolicLink},
-    DEVICE_OBJECT, DRIVER_OBJECT, IRP, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PIRP,
-    STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteSymbolicLink}, DEVICE_OBJECT, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IRP, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL
 };
 
 #[cfg(not(test))]
@@ -35,18 +35,36 @@ static GLOBAL_ALLOCATOR: WdkAllocator = WdkAllocator;
 #[export_name = "DriverEntry"] // WDF expects a symbol with the name DriverEntry
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
-    _registry_path: PCUNICODE_STRING,
+    registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] Starting Sanctum driver...");
 
-    //
-    // Configure the drivers callbacks
-    //
-    driver.DriverUnload = Some(driver_exit);
-    driver.MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
+    // let mut driver_name = DRIVER_NAME.to_u16_vec().to_windows_unicode_string().unwrap();
+    // let status = IoCreateDriver(
+    //     &mut driver_name,
+    //     Some(sanctum_entry),
+    // );
+    // if !nt_success(status) {
+    //     println!("[sanctum] [-] Error with IoCreateDriver. Exiting");
+    //     return status;
+    // }
+
+    let status = sanctum_entry(driver, registry_path as *mut _);
+
+    status
+}
+
+
+/// This deals with setting up the driver and any callbacks / configurations required
+/// for its operation and lifetime.
+pub unsafe extern "C" fn sanctum_entry(
+    driver: *mut DRIVER_OBJECT,
+    _registry_path: PUNICODE_STRING,
+) -> NTSTATUS {
+    println!("[sanctum] [i] running sanctum_entry...");
 
     //
-    // Configure the device symbolic links so we can access it from usermode
+    // Configure the strings
     //
     let mut device_name = DEVICE_NAME_PATH
         .to_u16_vec()
@@ -58,6 +76,33 @@ pub unsafe extern "system" fn driver_entry(
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
 
+    //
+    // Create the device
+    //
+    let mut device_object: PDEVICE_OBJECT = null_mut();
+    let res = IoCreateDevice(
+        driver,
+        0,
+        &mut device_name,
+        FILE_DEVICE_UNKNOWN, // If a type of hardware does not match any of the defined types, specify a value of either FILE_DEVICE_UNKNOWN
+        FILE_DEVICE_SECURE_OPEN,
+        0,
+        &mut device_object,
+    );
+    if !nt_success(res) {
+        println!("[sanctum] [-] Unable to create device via IoCreateDevice. Failed with code: {res}.");
+        return res;
+    }
+
+    //
+    // Configure the drivers callbacks
+    //
+    (*driver).DriverUnload = Some(driver_exit);
+    (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
+
+    //
+    // Create the symbolic link
+    //
     if IoCreateSymbolicLink(&mut symbolic_link, &mut device_name) != 0 {
         println!("[sanctum] [-] Failed to create driver symbolic link.");
         return STATUS_UNSUCCESSFUL;

@@ -104,3 +104,23 @@ pub unsafe fn pcwstr_to_string(s: PCWSTR) -> Result<String, Box<dyn Error>> {
 
     Ok(String::from_utf16_lossy(std::slice::from_raw_parts(s.0, len)))
 }
+
+
+/// Converts a PWSTR to a String
+/// 
+/// # Safety 
+/// 
+/// Dereferences the raw pointer of the PWSTR
+pub unsafe fn pwstr_to_string(s: PWSTR) -> Result<String, Box<dyn Error>> {
+    
+    if s.is_null() {
+        return Err("PCWSTR was null.".into());
+    }
+    
+    let mut len = 0;
+    while *s.0.add(len) != 0 {
+        len += 1;
+    }
+
+    Ok(String::from_utf16_lossy(std::slice::from_raw_parts(s.0, len)))
+}

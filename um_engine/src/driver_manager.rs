@@ -1,22 +1,22 @@
 use core::{panic, str};
 use std::{ffi::c_void, ptr::null_mut};
 
-use shared::{constants::{DEVICE_NAME_PATH, SVC_NAME, SYMBOLIC_NAME_PATH, SYS_INSTALL_RELATIVE_LOC}, ioctl::SANC_IOCTL_PING};
+use shared::{constants::{DEVICE_NAME_PATH, DRIVER_UM_NAME, SVC_NAME, SYMBOLIC_NAME_PATH, SYS_INSTALL_RELATIVE_LOC}, ioctl::SANC_IOCTL_PING};
 use windows::{
     core::{Error, PCWSTR}, 
     Win32::{
-        Foundation::{CloseHandle, GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS, GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH, UNICODE_STRING}, Storage::FileSystem::{CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING}, System::{LibraryLoader::GetModuleFileNameW, Services::{CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW, OpenServiceW, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS, SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_KERNEL_DRIVER, SERVICE_STATUS}, IO::DeviceIoControl}
+        Foundation::{CloseHandle, GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS, GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH}, Storage::FileSystem::{CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING}, System::{LibraryLoader::GetModuleFileNameW, Services::{CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW, OpenServiceW, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS, SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_KERNEL_DRIVER, SERVICE_STATUS}, IO::DeviceIoControl}
 }};
 
-use crate::strings::{pcwstr_to_string, ToUnicodeString, ToWindowsUnicodeString};
+use crate::strings::{pcwstr_to_string, pwstr_to_string, ToUnicodeString};
 
 
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name 
 /// and other critical settings.
 pub struct SanctumDriverManager {
-    pub device_name_path: UNICODE_STRING,
-    pub symbolic_link: UNICODE_STRING,
+    pub device_name_path: Vec<u16>,
+    pub symbolic_link: Vec<u16>,
     svc_path: Vec<u16>,
     svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
@@ -29,8 +29,9 @@ impl SanctumDriverManager {
         // 
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
-        let device_name_path = DEVICE_NAME_PATH.to_u16_vec().to_windows_unicode_string().unwrap();
-        let symbolic_link = SYMBOLIC_NAME_PATH.to_u16_vec().to_windows_unicode_string().unwrap();
+        // let device_name_path = DEVICE_NAME_PATH.to_u16_vec();
+        let device_name_path = DEVICE_NAME_PATH.to_u16_vec();
+        let symbolic_link = SYMBOLIC_NAME_PATH.to_u16_vec();
 
         let svc_path = get_sys_file_path();
         let svc_name = SVC_NAME.to_u16_vec();
@@ -229,7 +230,7 @@ impl SanctumDriverManager {
     }
 
 
-    /// Gets a handle to the driver via its registry path using CreateFile to obtain the handle. This function
+    /// Gets a handle to the driver via its registry path using CreateFileW. This function
     /// may silently fail if the driver is not installed, or there is some other error.
     /// 
     /// If unsuccessful, the handle field will be None; otherwise it will be Some(handle). The handle is managed
@@ -237,12 +238,11 @@ impl SanctumDriverManager {
     /// 
     /// todo better error handling for this fn.
     pub fn init_handle_via_registry(&mut self) {
-
-        println!("[i] Driver name path buffer: {:?}", self.device_name_path.Buffer);
-
+        let filename = PCWSTR::from_raw(self.device_name_path.as_ptr());
+        println!("[i] Filename: {}", unsafe {pcwstr_to_string(filename).unwrap()});
         let handle  = unsafe {
             CreateFileW(
-                self.device_name_path.Buffer,
+                filename,
                 GENERIC_READ.0 | GENERIC_WRITE.0,
                 FILE_SHARE_NONE,
                 None,
@@ -252,11 +252,17 @@ impl SanctumDriverManager {
             )
         };
 
+        println!("[+] Handle: {:?}", handle);
+
         match handle {
             Ok(h) => self.handle_via_path.handle = Some(h),
             Err(e) => {
                 eprintln!("[-] Unable to get handle to driver via its registry path, error: {e}");
             },
+        }
+
+        if self.handle_via_path.handle.is_some() {
+            println!("[i] Handle: {:?}", self.handle_via_path.handle.unwrap());
         }
     }
 
@@ -269,15 +275,22 @@ impl SanctumDriverManager {
     // All IOCTL functions should start with ioctl_
 
     /// Ping the driver from usermode
-    pub fn ioctl_ping_driver(&self) {
+    pub fn ioctl_ping_driver(&mut self) {
         //
         // Check the handle to the driver is valid, if not, attempt to initialise it.
         //
 
         // todo improve how the error handling happens..
         if self.handle_via_path.handle.is_none() {
-            eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. Unable to pass IOCTL.");
-            return;
+            // try 1 more time
+            self.init_handle_via_registry();
+            if self.handle_via_path.handle.is_none() {
+                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                    Unable to pass IOCTL. Handle: {:?}", 
+                    self.handle_via_path.handle
+                );
+                return;
+            }
         }
     
         //
