@@ -31,3 +31,7 @@ The EDR code is logically separated in one solution into the kernel mode driver 
 3) cargo make
 4) Windows Driver Kit & Developer Console (as admin for building the driver)
 5) May wish to add a symlnk for .vscode/settings.json in the driver to that in the root for spelling etc.
+
+## Helpful notes:
+
+1) To see driver install config, regedit: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Sanctum

@@ -1,47 +1,51 @@
-use core::str;
+use core::{panic, str};
 use std::{ffi::c_void, ptr::null_mut};
 
 use shared::{constants::{DEVICE_NAME_PATH, SVC_NAME, SYMBOLIC_NAME_PATH, SYS_INSTALL_RELATIVE_LOC}, ioctl::SANC_IOCTL_PING};
 use windows::{
     core::{Error, PCWSTR}, 
     Win32::{
-        Foundation::{CloseHandle, GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS, GENERIC_READ, GENERIC_WRITE, HANDLE, UNICODE_STRING}, Storage::FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING}, System::{Services::{CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW, OpenServiceW, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS, SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_KERNEL_DRIVER, SERVICE_STATUS}, IO::DeviceIoControl}
+        Foundation::{CloseHandle, GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS, GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH, UNICODE_STRING}, Storage::FileSystem::{CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING}, System::{LibraryLoader::GetModuleFileNameW, Services::{CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW, OpenServiceW, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS, SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_KERNEL_DRIVER, SERVICE_STATUS}, IO::DeviceIoControl}
 }};
 
-use crate::{driver_manager, strings::{ToUnicodeString, ToWindowsUnicodeString}};
+use crate::strings::{pcwstr_to_string, ToUnicodeString, ToWindowsUnicodeString};
 
 
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name 
 /// and other critical settings.
-pub struct SanctumDriverManager<'a> {
+pub struct SanctumDriverManager {
     pub device_name_path: UNICODE_STRING,
     pub symbolic_link: UNICODE_STRING,
-    svc_path: &'a str,
-    svc_name: &'a str,
+    svc_path: Vec<u16>,
+    svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
 }
 
-impl<'a> SanctumDriverManager<'a> {
+impl SanctumDriverManager {
     /// Generate a new instance of the driver manager, which initialises the device name path and symbolic link path
-    pub fn new() -> SanctumDriverManager<'a> {
+    pub fn new() -> SanctumDriverManager {
 
         // 
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
         let device_name_path = DEVICE_NAME_PATH.to_u16_vec().to_windows_unicode_string().unwrap();
         let symbolic_link = SYMBOLIC_NAME_PATH.to_u16_vec().to_windows_unicode_string().unwrap();
-        
-        // BUG path needs to be absolute, this should fix the issue where it is not being 
-        // installed & ran correctly
-        let install_path = SYS_INSTALL_RELATIVE_LOC;
-        
-        let svc_name = SVC_NAME;
+
+        let svc_path = get_sys_file_path();
+        let svc_name = SVC_NAME.to_u16_vec();
+
+        // check the sys file exists
+        let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(svc_path.as_ptr())) };
+        if x == INVALID_FILE_ATTRIBUTES {
+            panic!("[-] Cannot find sys file. Err: {}", unsafe { GetLastError().0 });
+        }
+
 
         let mut instance = SanctumDriverManager {
             device_name_path,
             symbolic_link,
-            svc_path: install_path,
+            svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
         };
@@ -67,8 +71,7 @@ impl<'a> SanctumDriverManager<'a> {
         //
         let mut sc_mgr = ServiceInterface::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
-        let svc_name = PCWSTR::from_raw(self.svc_name.to_u16_vec().as_ptr());
-        let svc_path = PCWSTR::from_raw(self.svc_path.to_u16_vec().as_ptr());
+
 
         //
         // Install the driver on the device
@@ -76,13 +79,13 @@ impl<'a> SanctumDriverManager<'a> {
         let handle = unsafe {
             match CreateServiceW(
                 sc_mgr.sc_db_handle.unwrap(), 
-                svc_name,  // service name
-                svc_name,  // display name
+                PCWSTR::from_raw(self.svc_name.as_ptr()),  // service name
+                PCWSTR::from_raw(self.svc_name.as_ptr()),  // display name
                 SERVICE_ALL_ACCESS, 
                 SERVICE_KERNEL_DRIVER, 
                 SERVICE_DEMAND_START, 
                 SERVICE_ERROR_NORMAL, 
-                svc_path,
+                PCWSTR::from_raw(self.svc_path.as_ptr()),
                 None, 
                 None, 
                 None, 
@@ -110,7 +113,7 @@ impl<'a> SanctumDriverManager<'a> {
                         }
                         _ => {
                             // anything else
-                            panic!("[-] Unable to create service. Error: {e}");
+                            panic!("[-] Unable to create service. Error: {e}. Svc path: {}", String::from_utf16_lossy(self.svc_path.as_slice()));
                         }
                     } // close match last err
 
@@ -314,6 +317,12 @@ impl<'a> SanctumDriverManager<'a> {
     }
 }
 
+impl Default for SanctumDriverManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 pub struct DriverHandleRaii {
     pub handle: Option<HANDLE>,
@@ -373,16 +382,10 @@ impl ServiceInterface {
     /// The handle will automatically be closed when it goes out of scope as it is implemented in the 
     /// drop trait.
     fn get_handle_to_sanctum_svc(&mut self, driver_manager: &SanctumDriverManager) -> Result<(), Error> {
-        
-        println!("[i] Service name: {}", driver_manager.svc_name);
-
-        let svc_name: PCWSTR = PCWSTR::from_raw(driver_manager.svc_name.to_u16_vec().as_ptr());
-
-        println!("[i] As ptr: {:?}", svc_name);
 
         let driver_handle = unsafe { OpenServiceW(
             self.sc_db_handle.unwrap(), 
-            svc_name, 
+            PCWSTR::from_raw(driver_manager.svc_name.as_ptr()), 
             SERVICE_ALL_ACCESS) 
         }?;
 
@@ -438,4 +441,29 @@ impl Drop for ServiceInterface {
             eprintln!("[-] Unable to close handle, handle was null!");
         }
     }
+}
+
+
+fn get_sys_file_path() -> Vec<u16> {
+    //
+        // A little long winded, but construct the path as a PCWSTR to where the sys driver is
+        // this should be bundled into the same location as where the usermode exe is.
+        //
+        let mut svc_path = vec![0u16; MAX_PATH as usize];
+        let len = unsafe { GetModuleFileNameW(None, &mut svc_path) };
+        if len == 0 {
+            eprintln!("[-] Error getting path of module. Win32 Error: {}", unsafe {GetLastError().0});
+        } else if len >= MAX_PATH {
+            panic!("[-] Path of module is too long. Run from a location with a shorter path.");
+        }
+
+        // let print_str = String::from_utf16_lossy(&svc_path);
+        // println!("[+] Svc path before: {:?}", print_str);
+        svc_path.truncate(len as usize - 13); // remove um_engine.sys\0
+        svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file 
+
+        // let print_str = String::from_utf16_lossy(&svc_path);
+        // println!("[+] Svc path after: {:?}", print_str);
+
+        svc_path
 }

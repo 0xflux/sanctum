@@ -1,6 +1,8 @@
 // usermode implementation of utilities
 
-use windows::{core::PWSTR, Win32::Foundation::UNICODE_STRING};
+use std::error::Error;
+
+use windows::{core::{PCWSTR, PWSTR}, Win32::Foundation::UNICODE_STRING};
 
 
 pub trait ToUnicodeString {
@@ -81,4 +83,24 @@ pub fn create_unicode_string(s: &Vec<u16>) -> Option<UNICODE_STRING>{
         Buffer: PWSTR::from_raw(s.as_ptr() as *mut u16),
     })
 
+}
+
+
+/// Converts a PCWSTR to a String
+/// 
+/// # Safety 
+/// 
+/// Dereferences the raw pointer of the PCWSTR
+pub unsafe fn pcwstr_to_string(s: PCWSTR) -> Result<String, Box<dyn Error>> {
+    
+    if s.is_null() {
+        return Err("PCWSTR was null.".into());
+    }
+    
+    let mut len = 0;
+    while *s.0.add(len) != 0 {
+        len += 1;
+    }
+
+    Ok(String::from_utf16_lossy(std::slice::from_raw_parts(s.0, len)))
 }
