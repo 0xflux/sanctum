@@ -10,17 +10,20 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
+use ffi::IoGetCurrentIrpStackLocation;
 use shared::constants::{DEVICE_NAME_PATH, SYMBOLIC_NAME_PATH};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::println;
 #[cfg(not(test))]
 use wdk_alloc::WdkAllocator;
 
+mod ffi;
 mod utils;
 
 use wdk_sys::{
     ntddk::{IoCreateSymbolicLink, IoDeleteSymbolicLink},
-    DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    DEVICE_OBJECT, DRIVER_OBJECT, IRP, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PIRP,
+    STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
 };
 
 #[cfg(not(test))]
@@ -35,7 +38,12 @@ pub unsafe extern "system" fn driver_entry(
     _registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] Starting Sanctum driver...");
+
+    //
+    // Configure the drivers callbacks
+    //
     driver.DriverUnload = Some(driver_exit);
+    driver.MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
 
     //
     // Configure the device symbolic links so we can access it from usermode
@@ -76,4 +84,24 @@ extern "C" fn driver_exit(_driver: *mut DRIVER_OBJECT) {
     let _ = unsafe { IoDeleteSymbolicLink(&mut symbolic_link) };
 
     println!("[sanctum] driver unloaded successfully...");
+}
+
+/// Device IOCTL input handler.
+///
+/// This function will process IOCTL commands as they come into the driver and executing the relevant actions.
+///
+/// # Arguments
+///
+/// - '_device': Unused
+/// - 'irp': A pointer to the I/O request packet (IRP) that contains information about the request
+unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
+    let p_stack_location = IoGetCurrentIrpStackLocation(pirp);
+
+    if p_stack_location.is_null() {
+        panic!("[-] Unable to get stack location for IRP.");
+    }
+
+    println!("[+] Found the stack location! {:p}", p_stack_location);
+
+    0
 }
