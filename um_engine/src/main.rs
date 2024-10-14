@@ -7,11 +7,11 @@ mod strings;
 
 fn main() {
     println!("[i] Sanctum usermode engine staring..");
-    
+
     // init the driver manager
     let mut driver_manager: SanctumDriverManager = SanctumDriverManager::new();
 
-    // 
+    //
     // Loop through the menu until the user has selected exit
     // if exit is selected, then return out of main.
     //
@@ -23,12 +23,10 @@ fn main() {
 }
 
 /// The main loop for accepting user input into the engine at the moment.
-/// 
+///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
-fn user_input_loop(
-    driver_manager: &mut SanctumDriverManager,
-) -> Option<()> {
+fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
     loop {
         println!("Make your selection below:");
         println!("------------------------------");
@@ -41,41 +39,49 @@ fn user_input_loop(
 
         let mut selection = String::new();
         if io::stdin().read_line(&mut selection).is_err() {
-            eprintln!("[-] Error reading value from command line."); println!(); continue;
+            eprintln!("[-] Error reading value from command line.");
+            println!();
+            continue;
         };
 
         let selection: i32 = if let Ok(s) = selection.trim().parse() {
             s
-        } else { eprintln!("[-] Error parsing selection as int."); println!(); continue; };
+        } else {
+            eprintln!("[-] Error parsing selection as int.");
+            println!();
+            continue;
+        };
 
         match selection {
             1 => {
                 // exit application
                 return None;
-            },
+            }
             2 => {
                 // install driver
                 driver_manager.install_driver();
-            },
+            }
             3 => {
                 // uninstall
                 driver_manager.uninstall_driver();
-            },
+            }
             4 => {
                 // start driver
                 driver_manager.start_driver();
-            },
+            }
             5 => {
                 // stop the driver
                 driver_manager.stop_driver();
-            },
+            }
             6 => {
                 // ping the driver
                 driver_manager.ioctl_ping_driver();
             }
 
             _ => {
-                eprintln!("[-] Unhandled command."); println!(); continue;
+                eprintln!("[-] Unhandled command.");
+                println!();
+                continue;
             }
         }
 

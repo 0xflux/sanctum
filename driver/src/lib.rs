@@ -13,7 +13,7 @@ extern crate wdk_panic;
 use core::ptr::null_mut;
 
 use ffi::{IoCreateDriver, IoGetCurrentIrpStackLocation};
-use shared::constants::{DEVICE_NAME_PATH, DRIVER_NAME, SYMBOLIC_NAME_PATH};
+use shared::constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::{nt_success, println};
 #[cfg(not(test))]
@@ -66,12 +66,12 @@ pub unsafe extern "C" fn sanctum_entry(
     //
     // Configure the strings
     //
-    let mut device_name = DEVICE_NAME_PATH
+    let mut dos_name = DOS_DEVICE_NAME
         .to_u16_vec()
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
 
-    let mut symbolic_link = SYMBOLIC_NAME_PATH
+    let mut nt_name = NT_DEVICE_NAME
         .to_u16_vec()
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn sanctum_entry(
     let res = IoCreateDevice(
         driver,
         0,
-        &mut device_name,
+        &mut nt_name,
         FILE_DEVICE_UNKNOWN, // If a type of hardware does not match any of the defined types, specify a value of either FILE_DEVICE_UNKNOWN
         FILE_DEVICE_SECURE_OPEN,
         0,
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn sanctum_entry(
     //
     // Create the symbolic link
     //
-    if IoCreateSymbolicLink(&mut symbolic_link, &mut device_name) != 0 {
+    if IoCreateSymbolicLink(&mut dos_name, &mut nt_name) != 0 {
         println!("[sanctum] [-] Failed to create driver symbolic link.");
         return STATUS_UNSUCCESSFUL;
     }
@@ -122,11 +122,11 @@ extern "C" fn driver_exit(_driver: *mut DRIVER_OBJECT) {
     //
     // rm symbolic link
     //
-    let mut symbolic_link = SYMBOLIC_NAME_PATH
+    let mut device_name = DOS_DEVICE_NAME
         .to_u16_vec()
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
-    let _ = unsafe { IoDeleteSymbolicLink(&mut symbolic_link) };
+    let _ = unsafe { IoDeleteSymbolicLink(&mut device_name) };
 
     println!("[sanctum] driver unloaded successfully...");
 }
