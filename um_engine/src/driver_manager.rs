@@ -13,8 +13,7 @@ use windows::{
             GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH,
         },
         Storage::FileSystem::{
-            CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE,
-            INVALID_FILE_ATTRIBUTES, OPEN_EXISTING,
+            CreateFileW, GetFileAttributesW, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING
         },
         System::{
             LibraryLoader::GetModuleFileNameW,
@@ -322,23 +321,29 @@ impl SanctumDriverManager {
         // If we have a handle
         //
 
-        let message = "Hello world";
-        const RESP_SIZE: u32 = 256;
-        let response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
-        let mut bytes_returned: u32 = 0;
+        let message = "Hello world\n".as_bytes();
+        // const RESP_SIZE: u32 = 256;
+        // let response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
+        // let mut bytes_returned: u32 = 0;
 
         // attempt the call
         let result = unsafe {
-            DeviceIoControl(
-                self.handle_via_path.handle.unwrap(),
-                SANC_IOCTL_PING,
-                Some(message.as_ptr() as *const c_void),
-                message.len() as u32,
-                Some(response.as_ptr() as *mut c_void),
-                RESP_SIZE,
-                Some(&mut bytes_returned),
+            WriteFile(
+                self.handle_via_path.handle.unwrap(), 
+                Some(message), 
+                Some(message.len() as *mut u32), 
                 None,
             )
+            // DeviceIoControl(
+            //     self.handle_via_path.handle.unwrap(),
+            //     SANC_IOCTL_PING,
+            //     Some(message.as_ptr() as *const c_void),
+            //     message.len() as u32,
+            //     Some(response.as_ptr() as *mut c_void),
+            //     RESP_SIZE,
+            //     Some(&mut bytes_returned),
+            //     None,
+            // )
         };
 
         if let Err(e) = result {
@@ -348,14 +353,14 @@ impl SanctumDriverManager {
         }
 
         // parse out the result
-        if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-            println!(
-                "[+] Bytes returned: {bytes_returned} response: {:#?}",
-                response
-            );
-        } else {
-            println!("[-] Error parsing response as UTF-8");
-        }
+        // if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
+        //     println!(
+        //         "[+] Bytes returned: {bytes_returned} response: {:#?}",
+        //         response
+        //     );
+        // } else {
+        //     println!("[-] Error parsing response as UTF-8");
+        // }
     }
 }
 

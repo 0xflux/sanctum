@@ -12,7 +12,7 @@ extern crate wdk_panic;
 
 use core::ptr::null_mut;
 
-use ffi::{IoCreateDriver, IoGetCurrentIrpStackLocation};
+use ffi::{IoGetCurrentIrpStackLocation};
 use shared::constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::{nt_success, println};
@@ -23,7 +23,7 @@ mod ffi;
 mod utils;
 
 use wdk_sys::{
-    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteSymbolicLink}, DEVICE_OBJECT, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IRP, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL
+    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest}, DEVICE_OBJECT, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_BUFFER_OVERFLOW, STATUS_SUCCESS, STATUS_UNSUCCESSFUL
 };
 
 #[cfg(not(test))]
@@ -98,7 +98,10 @@ pub unsafe extern "C" fn sanctum_entry(
     // Configure the drivers callbacks
     //
     (*driver).DriverUnload = Some(driver_exit);
-    (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
+    (*driver).MajorFunction[IRP_MJ_CREATE as usize] = Some(sanctum_create_close); // todo can authenticate requests coming from x
+    (*driver).MajorFunction[IRP_MJ_CLOSE as usize] = Some(sanctum_create_close);
+    (*driver).MajorFunction[IRP_MJ_WRITE as usize] = Some(handle_ioctl);
+    // (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
 
     //
     // Create the symbolic link
@@ -116,19 +119,48 @@ pub unsafe extern "C" fn sanctum_entry(
 /// # Safety
 ///
 /// This function makes use of unsafe code.
-extern "C" fn driver_exit(_driver: *mut DRIVER_OBJECT) {
-    println!("[sanctum] driver unloading...");
+extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
 
-    //
     // rm symbolic link
-    //
     let mut device_name = DOS_DEVICE_NAME
         .to_u16_vec()
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
     let _ = unsafe { IoDeleteSymbolicLink(&mut device_name) };
 
+    // delete the device
+    unsafe { IoDeleteDevice((*driver).DeviceObject);}
+
     println!("[sanctum] driver unloaded successfully...");
+}
+
+/// Device IOCTL input handler.
+///
+/// This function will process IOCTL commands as they come into the driver and executing the relevant actions.
+///
+/// # Arguments
+///
+/// - '_device': Unused
+/// - 'irp': A pointer to the I/O request packet (IRP) that contains information about the request
+// unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
+//     let p_stack_location = IoGetCurrentIrpStackLocation(pirp);
+
+//     if p_stack_location.is_null() {
+//         panic!("[-] Unable to get stack location for IRP.");
+//     }
+
+//     println!("[+] Found the stack location! {:p}", p_stack_location);
+
+//     0
+// }
+
+unsafe extern "C" fn sanctum_create_close(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
+    
+    (*pirp).IoStatus.__bindgen_anon_1.Status = STATUS_SUCCESS;
+    (*pirp).IoStatus.Information = 0;
+    IofCompleteRequest(pirp, IO_NO_INCREMENT as i8);
+    
+    STATUS_SUCCESS
 }
 
 /// Device IOCTL input handler.
@@ -143,10 +175,28 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
     let p_stack_location = IoGetCurrentIrpStackLocation(pirp);
 
     if p_stack_location.is_null() {
-        panic!("[-] Unable to get stack location for IRP.");
+        println!("[sanctum] [-] Unable to get stack location for IRP.");
+        return STATUS_UNSUCCESSFUL;
     }
 
     println!("[+] Found the stack location! {:p}", p_stack_location);
+
+    let control_code = (*p_stack_location).Parameters.DeviceIoControl.IoControlCode;
+    if (*p_stack_location).Parameters.DeviceIoControl.InputBufferLength > 256 {
+        println!("[sanctum] [-] Input size too large.");
+        return STATUS_BUFFER_OVERFLOW;
+    }
+
+    let something = (*p_stack_location).Parameters.DeviceIoControl.Type3InputBuffer as *mut &str;
+    println!("[+] [sanctum] input buffer: {}, control code: {}", *something, control_code);
+
+    // while false {
+    //     // if (*p_stack_location).Parameters.Write.Length < size_of(??) {
+    //         // error buffer too small
+    //     // }
+
+        
+    // }
 
     0
 }
