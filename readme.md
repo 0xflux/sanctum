@@ -1,6 +1,6 @@
 # Sanctum EDR
 
-<img width="1780" alt="image" src="https://raw.githubusercontent.com/0xflux/sanctum-rs/master/resources/images/cover.webp">
+![Rust Kernel Driver EDR Sanctum](imgs/evidence/sanctum-cover.webp)
 
 This project is a Windows Driver written in Rust.
 
@@ -28,7 +28,7 @@ The EDR code is logically separated in one solution into the kernel mode driver 
 
 The driver implements a basic IOCTL message passing from userland to the kernel driver, and responds with a response back up to userland. A basic example of this:
 
-![IOCTL example](imgs/evidence//ioctl_1.png)
+![IOCTL example](imgs/evidence/ioctl_1.png)
 
 # Additional info
 
