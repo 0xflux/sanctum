@@ -12,8 +12,9 @@ extern crate wdk_panic;
 
 use core::{ffi::c_void, ptr::null_mut};
 
-use ffi::{IoGetCurrentIrpStackLocation, RtlCopyMemory};
-use shared::constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME};
+use ffi::IoGetCurrentIrpStackLocation;
+use ioctls::ioctl_handler_ping;
+use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::SANC_IOCTL_PING};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::{nt_success, println};
 #[cfg(not(test))]
@@ -21,9 +22,10 @@ use wdk_alloc::WdkAllocator;
 
 mod ffi;
 mod utils;
+mod ioctls;
 
 use wdk_sys::{
-    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, RtlCopyMemoryNonTemporal, RtlCopyString}, DEVICE_OBJECT, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_OVERFLOW, STATUS_SUCCESS, STATUS_UNSUCCESSFUL
+    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, RtlCopyMemoryNonTemporal, RtlCopyString}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_OVERFLOW, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION
 };
 
 #[cfg(not(test))]
@@ -39,17 +41,7 @@ pub unsafe extern "system" fn driver_entry(
 ) -> NTSTATUS {
     println!("[sanctum] [i] Starting Sanctum driver...");
 
-    // let mut driver_name = DRIVER_NAME.to_u16_vec().to_windows_unicode_string().unwrap();
-    // let status = IoCreateDriver(
-    //     &mut driver_name,
-    //     Some(sanctum_entry),
-    // );
-    // if !nt_success(status) {
-    //     println!("[sanctum] [-] Error with IoCreateDriver. Exiting");
-    //     return status;
-    // }
-
-    let status = sanctum_entry(driver, registry_path as *mut _);
+    let status = configure_driver(driver, registry_path as *mut _);
 
     status
 }
@@ -57,7 +49,7 @@ pub unsafe extern "system" fn driver_entry(
 
 /// This deals with setting up the driver and any callbacks / configurations required
 /// for its operation and lifetime.
-pub unsafe extern "C" fn sanctum_entry(
+pub unsafe extern "C" fn configure_driver(
     driver: *mut DRIVER_OBJECT,
     _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
@@ -80,6 +72,7 @@ pub unsafe extern "C" fn sanctum_entry(
     // Create the device
     //
     let mut device_object: PDEVICE_OBJECT = null_mut();
+    
     let res = IoCreateDevice(
         driver,
         0,
@@ -102,6 +95,9 @@ pub unsafe extern "C" fn sanctum_entry(
     // (*driver).MajorFunction[IRP_MJ_WRITE as usize] = Some(handle_ioctl);
     (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
     (*driver).DriverUnload = Some(driver_exit);
+
+    // Specifies the type of buffering that is used by the I/O manager for I/O requests that are sent to the device stack.
+    (*device_object).Flags |= DO_BUFFERED_IO;
 
     //
     // Create the symbolic link
@@ -157,8 +153,8 @@ unsafe extern "C" fn sanctum_create_close(_device: *mut DEVICE_OBJECT, pirp: PIR
 ///
 /// - '_device': Unused
 /// - 'irp': A pointer to the I/O request packet (IRP) that contains information about the request
-unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
-    let p_stack_location = IoGetCurrentIrpStackLocation(pirp);
+unsafe extern "C" fn handle_ioctl(device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
+    let p_stack_location: *mut _IO_STACK_LOCATION = IoGetCurrentIrpStackLocation(pirp);
 
     if p_stack_location.is_null() {
         println!("[sanctum] [-] Unable to get stack location for IRP.");
@@ -168,43 +164,34 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
     println!("[sanctum] [+] Found the stack location! {:p}", p_stack_location);
 
     let control_code = (*p_stack_location).Parameters.DeviceIoControl.IoControlCode; // IOCTL code
-    let input_len = (*p_stack_location).Parameters.DeviceIoControl.InputBufferLength; // length of in buffer
-    let input_buffer = (*p_stack_location).Parameters.DeviceIoControl.Type3InputBuffer; // ptr to the buffer
 
-    // validate the pointer
-    if input_buffer.is_null() {
-        println!("[sanctum] [-] IOCTL input buffer was null.");
-        return STATUS_UNSUCCESSFUL;
-    }
+    // process the IOCTL based on its code, note that the functions implementing IOCTL's should
+    // contain detailed error messages within the functions, returning a Result<(), NTSTATUS> this will
+    // assist debugging exactly where an error has occurred, and not printing it at this level prevents
+    // duplication.
+    //
+    // we still require calling IofCompleteRequest to return the IRP to the I/O manager otherwise we risk
+    // causing the driver to hang.
+    let result: NTSTATUS = match control_code {
+        SANC_IOCTL_PING => {
+            if let Err(e) = ioctl_handler_ping(device, p_stack_location, pirp){
+                println!("[sanctum] [-] Error: {e}");
+                e
+            } else {
+                println!("[sanctum] [i] IOCTL complete.");
+                STATUS_SUCCESS
+            }
+        },
+        _ => {
+            println!("[sanctum] [-] IOCTL control code: {} not implemented.", control_code);
+            STATUS_UNSUCCESSFUL
+        }
+    };
 
-    // construct the message from the pointer (ascii &[u8])
-    let input_buffer = core::slice::from_raw_parts(input_buffer as *const u8, input_len as usize);
-    let input_buffer = core::str::from_utf8(input_buffer).unwrap();
-    println!("[sanctum] [+] Input buffer: {:?}, control code: {}", input_buffer, control_code);
-
-    // handled the request successfully
-    (*pirp).IoStatus.__bindgen_anon_1.Status = STATUS_SUCCESS;
-
-    // response back to userland
-    let response = "Msg received!".as_bytes();
-    let response_len = response.len();
-    (*pirp).IoStatus.Information = response_len as u64; // potentially unsafe for 32-bit
-
-    println!("[sanctum] [i] Sending back to userland {:?}", core::str::from_utf8(response).unwrap());
-    println!("[i] buffs: {:p}, {:p}", (*pirp).UserBuffer, response as *const _ as *mut c_void);
-
-    // copy the message into the UserBuffer location
-    // WARNING - SAFETY
-    // The driver should not write directly to the buffer pointed to by Irp->UserBuffer
-    // https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_irp
-    // todo - update this to something more appropriate, writing to AssociatedIrp.SystemBuffer blue screens
-    // the pointer is invalid..? works for now in this simple case :~)
-    // this is a BAD example of how to do this, but for now (for my purposes), it is fine.
-    RtlCopyMemoryNonTemporal((*pirp).UserBuffer as *mut c_void, response as *const _ as *mut c_void, response_len as u64);
-    
-    // complete the request
+    // indicates that the caller has completed all processing for a given I/O request and 
+    // is returning the given IRP to the I/O manager
+    // https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-iocompleterequest
     IofCompleteRequest(pirp, IO_NO_INCREMENT as i8);
     
-    // return success
-    STATUS_SUCCESS
+    result
 }

@@ -225,6 +225,8 @@ impl SanctumDriverManager {
         }
 
         // if we were successful, delete our local reference to the driver handle
+        // todo - possible bug here, making the handle None if there was an error
+        // maybe some form of IOCTL conversation to make sure unload is unloading..?
         self.handle_via_path = DriverHandleRaii::default(); // drop will be invoked closing the handle
 
         println!("[+] Driver stopped successfully.");
@@ -321,7 +323,7 @@ impl SanctumDriverManager {
 
         let message = "Hello world".as_bytes();
         const RESP_SIZE: u32 = 256; // todo
-        let response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
+        let mut response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
         let mut bytes_returned: u32 = 0;
 
         // attempt the call
@@ -338,7 +340,7 @@ impl SanctumDriverManager {
                 SANC_IOCTL_PING,
                 Some(message.as_ptr() as *const _),
                 message.len() as u32,
-                Some(response.as_ptr() as *mut c_void),
+                Some(response.as_mut_ptr() as *mut c_void),
                 RESP_SIZE,
                 Some(&mut bytes_returned),
                 None,
