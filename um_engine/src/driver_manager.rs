@@ -1,4 +1,4 @@
-use core::{panic, str};
+use core::str;
 use std::{ffi::c_void, ptr::null_mut};
 
 use shared::{
@@ -13,7 +13,7 @@ use windows::{
             GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH,
         },
         Storage::FileSystem::{
-            CreateFileW, GetFileAttributesW, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING
+            CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING
         },
         System::{
             LibraryLoader::GetModuleFileNameW,
@@ -28,13 +28,13 @@ use windows::{
     },
 };
 
-use crate::strings::{pcwstr_to_string, ToUnicodeString};
+use crate::strings::ToUnicodeString;
 
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name
 /// and other critical settings.
 pub struct SanctumDriverManager {
-    pub device_name_path: Vec<u16>,
+    pub device_um_symbolic_link_name: Vec<u16>,
     svc_path: Vec<u16>,
     svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
@@ -47,7 +47,7 @@ impl SanctumDriverManager {
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
         // let device_name_path = DEVICE_NAME_PATH.to_u16_vec();
-        let device_name_path = DRIVER_UM_NAME.to_u16_vec();
+        let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
 
         let svc_path = get_sys_file_path();
         let svc_name = SVC_NAME.to_u16_vec();
@@ -61,7 +61,7 @@ impl SanctumDriverManager {
         }
 
         let mut instance = SanctumDriverManager {
-            device_name_path,
+            device_um_symbolic_link_name,
             svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
@@ -74,6 +74,7 @@ impl SanctumDriverManager {
         instance
     }
 
+
     /// Command for the driver manager to install the driver on the target device.
     ///
     /// # Panics
@@ -84,7 +85,7 @@ impl SanctumDriverManager {
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
-        let mut sc_mgr = ServiceInterface::new();
+        let mut sc_mgr = ServiceControlManager::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
 
         //
@@ -92,7 +93,7 @@ impl SanctumDriverManager {
         //
         let handle = unsafe {
             match CreateServiceW(
-                sc_mgr.sc_db_handle.unwrap(),
+                sc_mgr.mgr_handle.unwrap(),
                 PCWSTR::from_raw(self.svc_name.as_ptr()), // service name
                 PCWSTR::from_raw(self.svc_name.as_ptr()), // display name
                 SERVICE_ALL_ACCESS,
@@ -161,7 +162,7 @@ impl SanctumDriverManager {
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
-        let mut sc_mgr = ServiceInterface::new();
+        let mut sc_mgr = ServiceControlManager::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
 
         // get a handle to sanctum service
@@ -176,7 +177,7 @@ impl SanctumDriverManager {
             if let Err(e) = StartServiceW(sc_mgr.sanctum_handle.unwrap(), None) {
                 eprintln!(
                     "[-] Failed to start service. {e}. Handle: {:?}.",
-                    sc_mgr.sc_db_handle.unwrap()
+                    sc_mgr.mgr_handle.unwrap()
                 );
                 return;
             };
@@ -188,13 +189,14 @@ impl SanctumDriverManager {
         println!("[+] Driver started successfully.");
     }
 
+
     /// Stop the driver
     ///
     /// # Panics
     ///
     /// Function will panic if it cannot open a handle to the SC Manager
     pub fn stop_driver(&mut self) {
-        let mut sc_mgr = ServiceInterface::new();
+        let mut sc_mgr = ServiceControlManager::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
 
         // get a handle to sanctum service
@@ -217,15 +219,17 @@ impl SanctumDriverManager {
             // if was error
             eprintln!(
                 "[-] Failed to stop the service, {e}. Handle: {:?}",
-                sc_mgr.sc_db_handle.unwrap()
+                sc_mgr.mgr_handle.unwrap()
             );
+            return;
         }
 
-        // delete our local reference to the driver handle
+        // if we were successful, delete our local reference to the driver handle
         self.handle_via_path = DriverHandleRaii::default(); // drop will be invoked closing the handle
 
         println!("[+] Driver stopped successfully.");
     }
+
 
     /// Uninstall the driver.
     ///
@@ -233,7 +237,7 @@ impl SanctumDriverManager {
     ///
     /// Function will panic if it cannot open a handle to the SC Manager
     pub fn uninstall_driver(&self) {
-        let mut sc_mgr = ServiceInterface::new();
+        let mut sc_mgr = ServiceControlManager::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
 
         // get a handle to sanctum service
@@ -247,12 +251,14 @@ impl SanctumDriverManager {
         if let Err(e) = unsafe { DeleteService(sc_mgr.sanctum_handle.unwrap()) } {
             eprintln!(
                 "[-] Failed to uninstall the driver: {e}. Handle: {:?}",
-                sc_mgr.sc_db_handle.unwrap()
+                sc_mgr.mgr_handle.unwrap()
             );
+            return;
         }
 
         println!("[+] Driver uninstalled successfully.");
     }
+
 
     /// Gets a handle to the driver via its registry path using CreateFileW. This function
     /// may silently fail if the driver is not installed, or there is some other error.
@@ -262,10 +268,7 @@ impl SanctumDriverManager {
     ///
     /// todo better error handling for this fn.
     pub fn init_handle_via_registry(&mut self) {
-        let filename = PCWSTR::from_raw(self.device_name_path.as_ptr());
-        println!("[i] Filename: {}", unsafe {
-            pcwstr_to_string(filename).unwrap()
-        });
+        let filename = PCWSTR::from_raw(self.device_um_symbolic_link_name.as_ptr());
         let handle = unsafe {
             CreateFileW(
                 filename,
@@ -278,19 +281,14 @@ impl SanctumDriverManager {
             )
         };
 
-        println!("[+] Handle: {:?}", handle);
-
         match handle {
             Ok(h) => self.handle_via_path.handle = Some(h),
             Err(e) => {
                 eprintln!("[-] Unable to get handle to driver via its registry path, error: {e}");
             }
         }
-
-        if self.handle_via_path.handle.is_some() {
-            println!("[i] Handle: {:?}", self.handle_via_path.handle.unwrap());
-        }
     }
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////// IOCTLS ////////////////////////////////////////////////////
@@ -321,29 +319,30 @@ impl SanctumDriverManager {
         // If we have a handle
         //
 
-        let message = "Hello world\n".as_bytes();
-        // const RESP_SIZE: u32 = 256;
-        // let response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
-        // let mut bytes_returned: u32 = 0;
+        let message = "Hello world".as_bytes();
+        const RESP_SIZE: u32 = 256; // todo
+        let response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
+        let mut bytes_returned: u32 = 0;
 
         // attempt the call
         let result = unsafe {
-            WriteFile(
-                self.handle_via_path.handle.unwrap(), 
-                Some(message), 
-                Some(message.len() as *mut u32), 
-                None,
-            )
-            // DeviceIoControl(
-            //     self.handle_via_path.handle.unwrap(),
-            //     SANC_IOCTL_PING,
-            //     Some(message.as_ptr() as *const c_void),
-            //     message.len() as u32,
-            //     Some(response.as_ptr() as *mut c_void),
-            //     RESP_SIZE,
+            // todo implementation for WriteFile
+            // WriteFile(
+            //     self.handle_via_path.handle.unwrap(), 
+            //     Some(message), 
             //     Some(&mut bytes_returned),
             //     None,
             // )
+            DeviceIoControl(
+                self.handle_via_path.handle.unwrap(),
+                SANC_IOCTL_PING,
+                Some(message.as_ptr() as *const _),
+                message.len() as u32,
+                Some(response.as_ptr() as *mut c_void),
+                RESP_SIZE,
+                Some(&mut bytes_returned),
+                None,
+            )
         };
 
         if let Err(e) = result {
@@ -352,17 +351,20 @@ impl SanctumDriverManager {
             return;
         }
 
+        println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
+
         // parse out the result
-        // if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-        //     println!(
-        //         "[+] Bytes returned: {bytes_returned} response: {:#?}",
-        //         response
-        //     );
-        // } else {
-        //     println!("[-] Error parsing response as UTF-8");
-        // }
+        if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
+            println!(
+                "[+] Bytes returned: {bytes_returned} response: {:#?}",
+                response
+            );
+        } else {
+            println!("[-] Error parsing response as UTF-8");
+        }
     }
 }
+
 
 impl Default for SanctumDriverManager {
     fn default() -> Self {
@@ -370,15 +372,18 @@ impl Default for SanctumDriverManager {
     }
 }
 
+
 pub struct DriverHandleRaii {
     pub handle: Option<HANDLE>,
 }
+
 
 impl Default for DriverHandleRaii {
     fn default() -> Self {
         Self { handle: None }
     }
 }
+
 
 impl Drop for DriverHandleRaii {
     fn drop(&mut self) {
@@ -393,19 +398,20 @@ impl Drop for DriverHandleRaii {
 /// A custom struct to hold a SC_HANDLE. This struct implements the drop trait so that
 /// when it goes out of scope, it will clean up its handle so you do not need to remember
 /// to call CloseServiceHandle.
-struct ServiceInterface {
-    sc_db_handle: Option<SC_HANDLE>,
+struct ServiceControlManager {
+    mgr_handle: Option<SC_HANDLE>,
     sanctum_handle: Option<SC_HANDLE>,
 }
 
-impl ServiceInterface {
-    /// Open a handle to the SC Manager, storing the resulting handle in the instance.
+impl ServiceControlManager {
+    /// Establishes a connection to the service control manager on the computer and opens the specified 
+    /// service control manager database.
     ///
     /// # Panics
     ///
     /// If the call to OpenServiceManagerW fails, this will panic.
     fn open_service_manager_w(&mut self, dw_desired_access: u32) {
-        self.sc_db_handle = unsafe {
+        self.mgr_handle = unsafe {
             match OpenSCManagerW(None, None, dw_desired_access) {
                 Ok(h) => Some(h),
                 Err(e) => panic!("[-] Unable to open service manager handle, {e}."),
@@ -424,7 +430,7 @@ impl ServiceInterface {
     ) -> Result<(), Error> {
         let driver_handle = unsafe {
             OpenServiceW(
-                self.sc_db_handle.unwrap(),
+                self.mgr_handle.unwrap(),
                 PCWSTR::from_raw(driver_manager.svc_name.as_ptr()),
                 SERVICE_ALL_ACCESS,
             )
@@ -437,29 +443,29 @@ impl ServiceInterface {
     }
 
     /// Instantiates the ServiceInterface with a null handle.
-    fn new() -> ServiceInterface {
-        ServiceInterface {
-            sc_db_handle: None,
+    fn new() -> ServiceControlManager {
+        ServiceControlManager {
+            mgr_handle: None,
             sanctum_handle: None,
         }
     }
 }
 
-impl Drop for ServiceInterface {
+impl Drop for ServiceControlManager {
     /// Automatically close the service handle if it is valid
     fn drop(&mut self) {
         //
         // Close the handle for the SC DB
         //
-        if self.sc_db_handle.is_none() {
+        if self.mgr_handle.is_none() {
             return;
         }
 
-        if self.sc_db_handle.unwrap().0 != null_mut() {
-            if let Err(e) = unsafe { CloseServiceHandle(self.sc_db_handle.unwrap()) } {
+        if self.mgr_handle.unwrap().0 != null_mut() {
+            if let Err(e) = unsafe { CloseServiceHandle(self.mgr_handle.unwrap()) } {
                 eprintln!("[-] Unable to close handle after installing service. Error: {e}");
             }
-            self.sc_db_handle = None;
+            self.mgr_handle = None;
         } else {
             eprintln!("[-] Unable to close handle, handle was null!");
         }
@@ -482,12 +488,15 @@ impl Drop for ServiceInterface {
     }
 }
 
+
+/// Gets the path to the .sys file on the target device, for the time being this needs to be
+/// located in the same folder as where this usermode exe is run from.
 fn get_sys_file_path() -> Vec<u16> {
     //
     // A little long winded, but construct the path as a PCWSTR to where the sys driver is
     // this should be bundled into the same location as where the usermode exe is.
     //
-    let mut svc_path = vec![0u16; MAX_PATH as usize];
+    let mut svc_path: Vec<u16> = vec![0u16; MAX_PATH as usize];
     let len = unsafe { GetModuleFileNameW(None, &mut svc_path) };
     if len == 0 {
         eprintln!(
@@ -498,13 +507,8 @@ fn get_sys_file_path() -> Vec<u16> {
         panic!("[-] Path of module is too long. Run from a location with a shorter path.");
     }
 
-    // let print_str = String::from_utf16_lossy(&svc_path);
-    // println!("[+] Svc path before: {:?}", print_str);
     svc_path.truncate(len as usize - 13); // remove um_engine.sys\0
     svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file
-
-    // let print_str = String::from_utf16_lossy(&svc_path);
-    // println!("[+] Svc path after: {:?}", print_str);
 
     svc_path
 }

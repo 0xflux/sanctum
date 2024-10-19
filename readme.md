@@ -22,6 +22,16 @@ The Windows Driver Kit (WDK) crate ecosystem provides essential tools that make 
 
 The EDR code is logically separated in one solution into the kernel mode driver (the driver folder [found here](https://github.com/0xflux/sanctum/tree/master/driver)), the usermode engine ([found here](https://github.com/0xflux/sanctum/tree/master/um_engine)), and usermode DLL (todo).
 
+# Current State / Features
+
+## Basic IOCTL
+
+The driver implements a basic IOCTL message passing from userland to the kernel driver, and responds with a response back up to userland. A basic example of this:
+
+![IOCTL example](imgs/evidence//ioctl_1.png)
+
+# Additional info
+
 ## Installation
 
 ### Requirements:

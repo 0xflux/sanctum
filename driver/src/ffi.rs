@@ -1,10 +1,10 @@
 // FFI for functions not yet implemented in the Rust Windows Driver project
 
-use wdk_sys::{DRIVER_INITIALIZE, NTSTATUS, PIO_STACK_LOCATION, PIRP, PUNICODE_STRING};
+use wdk_sys::{PIO_STACK_LOCATION, PIRP};
 
 #[link(name = "ntoskrnl")]
 extern "system" {
-    pub fn IoCreateDriver(driver_name: PUNICODE_STRING, driver_initialise: DRIVER_INITIALIZE) -> NTSTATUS;
+    // pub fn RtlCopyMemory(dest: *mut u64, source: *mut u64, length: usize);
 }
 
 pub unsafe fn IoGetCurrentIrpStackLocation(irp: PIRP) -> PIO_STACK_LOCATION {
