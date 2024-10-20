@@ -10,6 +10,12 @@ I have started a blog series on Sanctum, you can check it out [on my blog here](
 
 Currently in its early stages, I have a plan for the project which I will update in due course. If you like this project, or my work, please feel free to reach out!
 
+### Project plan
+
+This is a high level overview for how I would like to structure this project.
+
+![IOCTL example](imgs/planning/sanctum_overview.jpg)
+
 ### Why Rust for writing a Windows Driver
 
 Traditionally, drivers have been written in C and, to some extent, C++. While it might seem significantly easier to write this project in C—I even began it that way—as an avid Rust enthusiast, I found myself longing for Rust's features and safety guarantees. Writing in C or C++ made me miss the modern tooling and expressive power that Rust provides.
