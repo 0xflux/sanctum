@@ -26,6 +26,7 @@ impl IoctlBuffer {
         }
     }
 
+    /// Converts the input buffer from the IO Manager into a valid utf8 string.
     fn get_buf_to_str(
         &mut self,
     ) -> Result<&str, NTSTATUS> {
@@ -85,6 +86,44 @@ impl IoctlBuffer {
     
         Ok(())
     }
+
+
+    /// Sends a str slice &[u8] back to the userland application taking in a &str and making 
+    /// the necessary conversions.
+    /// 
+    /// # Returns
+    /// 
+    /// Success: ()
+    /// 
+    /// Error: NTSTATUS
+    fn send_str(
+        &self,
+        input_str: &str,
+    ) -> Result<(), NTSTATUS> {
+
+        // handled the request successfully
+        unsafe {(*self.pirp).IoStatus.__bindgen_anon_1.Status = STATUS_SUCCESS};
+
+        // response back to userland
+        let response = input_str.as_bytes();
+        let response_len = response.len();
+        unsafe {(*self.pirp).IoStatus.Information = response_len as u64};
+
+        println!("[sanctum] [i] Sending back to userland {:?}", core::str::from_utf8(response).unwrap());
+
+        // Copy the data now into the buffer to send back to usermode.
+        // The driver should not write directly to the buffer pointed to by Irp->UserBuffer.
+        unsafe {
+            if !(*self.pirp).AssociatedIrp.SystemBuffer.is_null() {
+                RtlCopyMemoryNonTemporal((*self.pirp).AssociatedIrp.SystemBuffer as *mut c_void, response as *const _ as *mut c_void, response_len as u64);
+            } else {
+                println!("[sanctum] [-] Error handling IOCTL PING, SystemBuffer was null.");
+                return Err(STATUS_UNSUCCESSFUL);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn ioctl_handler_ping(
@@ -99,26 +138,8 @@ pub fn ioctl_handler_ping(
     let input_buffer = ioctl_buffer.get_buf_to_str()?;
     println!("[sanctum] [+] Input buffer: {:?}", input_buffer);
 
-    // handled the request successfully
-    unsafe {(*pirp).IoStatus.__bindgen_anon_1.Status = STATUS_SUCCESS};
-
-    // response back to userland
-    let response = "Msg received!".as_bytes();
-    let response_len = response.len();
-    unsafe {(*pirp).IoStatus.Information = response_len as u64};
-
-    println!("[sanctum] [i] Sending back to userland {:?}", core::str::from_utf8(response).unwrap());
-
-    // Copy the data now into the buffer to send back to usermode.
-    // The driver should not write directly to the buffer pointed to by Irp->UserBuffer.
-    unsafe {
-        if !(*pirp).AssociatedIrp.SystemBuffer.is_null() {
-            RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer as *mut c_void, response as *const _ as *mut c_void, response_len as u64);
-        } else {
-            println!("[sanctum] [-] Error handling IOCTL PING, SystemBuffer was null.");
-            return Err(STATUS_UNSUCCESSFUL);
-        }
-    }
+    // send a str response back to userland
+    ioctl_buffer.send_str("Msg received!")?;
 
     Ok(())
 }
