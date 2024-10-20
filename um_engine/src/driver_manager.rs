@@ -3,7 +3,7 @@ use std::{ffi::c_void, ptr::null_mut};
 
 use shared::{
     constants::{DRIVER_UM_NAME, SVC_NAME, SYS_INSTALL_RELATIVE_LOC},
-    ioctl::SANC_IOCTL_PING,
+    ioctl::{SancIoctlPing, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
 use windows::{
     core::{Error, PCWSTR},
@@ -350,6 +350,74 @@ impl SanctumDriverManager {
         if let Err(e) = result {
             eprintln!("Error from attempting IOCTL call. {e}");
             // no cleanup required, no additional handles or heap objects
+            return;
+        }
+
+        println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
+
+        // parse out the result
+        if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
+            println!(
+                "[+] Bytes returned: {bytes_returned} response: {:#?}",
+                response
+            );
+        } else {
+            println!("[-] Error parsing response as UTF-8");
+        }
+    }
+
+
+    /// Pings the driver with a struct as its message
+    pub fn ioctl_ping_driver_w_struct(&mut self) {
+        //
+        // Check the handle to the driver is valid, if not, attempt to initialise it.
+        //
+
+        // todo improve how the error handling happens..
+        if self.handle_via_path.handle.is_none() {
+            // try 1 more time
+            self.init_handle_via_registry();
+            if self.handle_via_path.handle.is_none() {
+                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                    Unable to pass IOCTL. Handle: {:?}", 
+                    self.handle_via_path.handle
+                );
+                return;
+            }
+        }
+
+        //
+        // If we have a handle
+        //
+
+
+        let ver = "0.0.1".as_bytes();
+        let message = SancIoctlPing {
+            received: true,
+            version: ver,
+            str_len: ver.len(),
+        };
+
+        const RESP_SIZE: u32 = 256; // todo
+        let mut response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
+        let mut bytes_returned: u32 = 0;
+
+        // attempt the call
+        let result = unsafe {
+            DeviceIoControl(
+                self.handle_via_path.handle.unwrap(),
+                SANC_IOCTL_PING_WITH_STRUCT,
+                Some(&message as *const _ as *const c_void),
+                std::mem::size_of_val(&message) as u32,
+                Some(response.as_mut_ptr() as *mut c_void),
+                RESP_SIZE,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+
+        if let Err(e) = result {
+            eprintln!("Error from attempting IOCTL call. {e}");
             return;
         }
 

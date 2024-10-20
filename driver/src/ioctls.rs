@@ -1,7 +1,8 @@
 use core::{ffi::c_void, ptr::null_mut};
 
+use shared::ioctl::SancIoctlPing;
 use wdk::println;
-use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, DEVICE_OBJECT, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, DEVICE_OBJECT, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, STATUS_UNSUPPORTED_PAGING_MODE, _IO_STACK_LOCATION};
 
 struct IoctlBuffer {
     len: u32,
@@ -32,7 +33,7 @@ impl IoctlBuffer {
     ) -> Result<&str, NTSTATUS> {
 
         // first initialise the fields with buf and len
-        self.check_ioctl_buffer()?;
+        self.receive()?;
 
         // construct the message from the pointer (ascii &[u8])
         let input_buffer = unsafe {core::slice::from_raw_parts(self.buf as *const u8, self.len as usize)};
@@ -48,7 +49,8 @@ impl IoctlBuffer {
         Ok(input_buffer)
     }
 
-    /// Checks the validity of data coming in from an IOCTL handler ensuring data isn't null etc. 
+    /// Receives raw data from the IO Manager and checks the validity of the data. If the data was valid, it will set the member 
+    /// fields for the length, buffer, and raw pointers to the required structs. 
     /// 
     /// If you want to get a string out of an ioctl buffer, it would be better to call get_buf_to_str.
     /// 
@@ -57,7 +59,7 @@ impl IoctlBuffer {
     /// Success: a IoctlBuffer which will hold the length and a pointer to the buffer
     /// 
     /// Error: NTSTATUS
-    fn check_ioctl_buffer(
+    fn receive(
         &mut self,
     ) -> Result<(), NTSTATUS> {
     
@@ -81,8 +83,8 @@ impl IoctlBuffer {
             return Err(STATUS_UNSUCCESSFUL);
         }
     
-            self.len = input_len;
-            self.buf = input_buffer;
+        self.len = input_len;
+        self.buf = input_buffer;
     
         Ok(())
     }
@@ -126,20 +128,49 @@ impl IoctlBuffer {
     }
 }
 
+/// Simple IOCTL test ping from usermode
 pub fn ioctl_handler_ping(
-    _device: *mut DEVICE_OBJECT, 
     p_stack_location: *mut _IO_STACK_LOCATION,
     pirp: PIRP,
 ) -> Result<(), NTSTATUS> {
 
     let mut ioctl_buffer = IoctlBuffer::new(p_stack_location, pirp);
-    // ioctl_buffer.check_ioctl_buffer()?;
+    // ioctl_buffer.receive()?;
 
     let input_buffer = ioctl_buffer.get_buf_to_str()?;
     println!("[sanctum] [+] Input buffer: {:?}", input_buffer);
 
     // send a str response back to userland
     ioctl_buffer.send_str("Msg received!")?;
+
+    Ok(())
+}
+
+
+pub fn ioctl_handler_ping_return_struct(
+    p_stack_location: *mut _IO_STACK_LOCATION,
+    pirp: PIRP,
+) -> Result<(), NTSTATUS> {
+
+    let mut ioctl_buffer = IoctlBuffer::new(p_stack_location, pirp);
+    ioctl_buffer.receive()?; // receive the data
+
+    let input_data = ioctl_buffer.buf as *mut c_void as *mut SancIoctlPing;
+    if input_data.is_null() {
+        println!("[sanctum] [-] Input struct data in IOCTL PING with struct was null.");
+    }
+
+    let input_data = unsafe { &(*input_data) };
+    let txt = unsafe { core::slice::from_raw_parts(input_data.version.as_ptr() as *const u8, input_data.str_len) };
+    let txt = match core::str::from_utf8(txt) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("[sanctum] [-] Error converting input slice to string. {e}");
+            return Err(STATUS_UNSUCCESSFUL);
+        },
+    };
+
+    println!("[sanctum] [+] Input bool: {}, input str: {:#?}", input_data.received, txt);
 
     Ok(())
 }

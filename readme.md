@@ -36,6 +36,11 @@ The driver implements a basic IOCTL message passing from userland to the kernel 
 
 ![IOCTL example](imgs/evidence/ioctl_1.png)
 
+You can also pass structs via IOCTL as evidenced:
+
+![IOCTL structs](imgs/evidence/ioctl_2.png)
+
+
 # Additional info
 
 ## Installation

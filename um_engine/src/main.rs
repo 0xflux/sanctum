@@ -35,7 +35,8 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
         println!("[3] Uninstall driver.");
         println!("[4] Start driver.");
         println!("[5] Stop driver.");
-        println!("[6] Ping driver via IOCTL.");
+        println!("[6] Ping driver and get string response.");
+        println!("[7] Ping driver with a struct.");
 
         let mut selection = String::new();
         if io::stdin().read_line(&mut selection).is_err() {
@@ -76,7 +77,10 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
             6 => {
                 // ping the driver
                 driver_manager.ioctl_ping_driver();
-            }
+            },
+            7 => {
+                driver_manager.ioctl_ping_driver_w_struct();
+            },
 
             _ => {
                 eprintln!("[-] Unhandled command.");

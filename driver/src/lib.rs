@@ -10,11 +10,11 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use core::{ffi::c_void, ptr::null_mut};
+use core::{ptr::null_mut};
 
 use ffi::IoGetCurrentIrpStackLocation;
-use ioctls::ioctl_handler_ping;
-use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::SANC_IOCTL_PING};
+use ioctls::{ioctl_handler_ping, ioctl_handler_ping_return_struct};
+use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::{SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::{nt_success, println};
 #[cfg(not(test))]
@@ -153,7 +153,7 @@ unsafe extern "C" fn sanctum_create_close(_device: *mut DEVICE_OBJECT, pirp: PIR
 ///
 /// - '_device': Unused
 /// - 'irp': A pointer to the I/O request packet (IRP) that contains information about the request
-unsafe extern "C" fn handle_ioctl(device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
+unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTSTATUS {
     let p_stack_location: *mut _IO_STACK_LOCATION = IoGetCurrentIrpStackLocation(pirp);
 
     if p_stack_location.is_null() {
@@ -174,7 +174,7 @@ unsafe extern "C" fn handle_ioctl(device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTS
     // causing the driver to hang.
     let result: NTSTATUS = match control_code {
         SANC_IOCTL_PING => {
-            if let Err(e) = ioctl_handler_ping(device, p_stack_location, pirp){
+            if let Err(e) = ioctl_handler_ping(p_stack_location, pirp){
                 println!("[sanctum] [-] Error: {e}");
                 e
             } else {
@@ -182,6 +182,15 @@ unsafe extern "C" fn handle_ioctl(device: *mut DEVICE_OBJECT, pirp: PIRP) -> NTS
                 STATUS_SUCCESS
             }
         },
+        SANC_IOCTL_PING_WITH_STRUCT => {
+            if let Err(e) = ioctl_handler_ping_return_struct(p_stack_location, pirp){
+                println!("[sanctum] [-] Error: {e}");
+                e
+            } else {
+                println!("[sanctum] [i] IOCTL complete.");
+                STATUS_SUCCESS
+            }
+        }
         _ => {
             println!("[sanctum] [-] IOCTL control code: {} not implemented.", control_code);
             STATUS_UNSUCCESSFUL

@@ -23,7 +23,7 @@ pub const SANC_IOCTL_PING: u32 =
     CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
 pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
-    CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
 
 // ****************** IOCTL MSG STRUCTS ******************
@@ -33,4 +33,5 @@ pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
 pub struct SancIoctlPing<'a> {
     pub received: bool,
     pub version: &'a[u8],
+    pub str_len: usize,
 }
