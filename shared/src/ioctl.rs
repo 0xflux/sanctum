@@ -1,4 +1,5 @@
-// IOCTL definitions
+// This file will contain definitions of IOCTLs and definitions of any structures related directly
+// to IOCTL message passing
 
 extern crate alloc;
 
@@ -15,6 +16,21 @@ macro_rules! CTL_CODE {
     };
 }
 
+// ****************** IOCTL DEFINITIONS ******************
+
 // general communication
 pub const SANC_IOCTL_PING: u32 =
     CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
+pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
+    CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
+
+// ****************** IOCTL MSG STRUCTS ******************
+
+/// Response to a hello ping from usermode, indicates whether the data was received, and the driver
+/// will respond with its current version.
+pub struct SancIoctlPing<'a> {
+    pub received: bool,
+    pub version: &'a[u8],
+}
