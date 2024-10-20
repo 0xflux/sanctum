@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use shared::constants::SanctumVersion;
 use wdk_sys::UNICODE_STRING;
 
 pub trait ToUnicodeString {
@@ -74,4 +75,20 @@ pub fn create_unicode_string(s: &Vec<u16>) -> Option<UNICODE_STRING> {
         MaximumLength: (len * 2) as u16,
         Buffer: s.as_ptr() as *mut u16,
     })
+}
+
+
+/// Checks the compatibility of the driver and client versions based on major.minor.patch fields.
+/// 
+/// # Returns
+/// 
+/// True if compatible, false otherwise.
+pub fn check_driver_version(client_version: &SanctumVersion) -> bool {
+
+    // only compatible with versions less than 1
+    if client_version.major >= 1 {
+        return false;
+    }
+
+    true
 }

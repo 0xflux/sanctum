@@ -40,6 +40,10 @@ You can also pass structs via IOCTL as evidenced:
 
 ![IOCTL structs](imgs/evidence/ioctl_2.png)
 
+Driver checks compatibility with the client version and will panic (usermode) and unload the driver if the versions are not compatible.
+
+![Driver compatibility](imgs/evidence/ioctl_compatible.png)
+
 
 # Additional info
 

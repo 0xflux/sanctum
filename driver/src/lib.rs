@@ -13,8 +13,8 @@ extern crate wdk_panic;
 use core::{ptr::null_mut};
 
 use ffi::IoGetCurrentIrpStackLocation;
-use ioctls::{ioctl_handler_ping, ioctl_handler_ping_return_struct};
-use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::{SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
+use ioctls::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
+use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToUnicodeString, ToWindowsUnicodeString};
 use wdk::{nt_success, println};
 #[cfg(not(test))]
@@ -188,7 +188,16 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
             } else {
                 STATUS_SUCCESS
             }
-        }
+        },
+        SANC_IOCTL_CHECK_COMPATIBILITY => {
+            if let Err(e) = ioctl_check_driver_compatibility(p_stack_location, pirp){
+                println!("[sanctum] [-] Error: {e}");
+                e
+            } else {
+                STATUS_SUCCESS
+            }
+        },
+        
         _ => {
             println!("[sanctum] [-] IOCTL control code: {} not implemented.", control_code);
             STATUS_UNSUCCESSFUL

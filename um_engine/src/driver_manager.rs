@@ -2,8 +2,8 @@ use core::str;
 use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
-    constants::{DRIVER_UM_NAME, SVC_NAME, SYS_INSTALL_RELATIVE_LOC},
-    ioctl::{SancIoctlPing, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
+    constants::{DRIVER_UM_NAME, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
+    ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
 use windows::{
     core::{Error, PCWSTR},
@@ -186,6 +186,13 @@ impl SanctumDriverManager {
         // try to get a handle now the driver has started
         self.init_handle_via_registry();
 
+        // check the driver version is compatible with the engine
+        if self.ioctl_check_driver_compatibility() == false {
+            self.stop_driver(); // ensure a clean shutdown
+            // todo replace panic once GUI in
+            panic!("[-] Driver and client version incompatible. Please ensure you are running the latest version.");
+        }
+
         println!("[+] Driver started successfully.");
     }
 
@@ -297,6 +304,64 @@ impl SanctumDriverManager {
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // All IOCTL functions should start with ioctl_
+
+    /// Checks the driver compatibility between the driver and user mode applications. 
+    /// 
+    /// # Panics
+    /// 
+    /// This function will panic if it cannot obtain a handle to the driver to communicate with it.
+    /// 
+    /// # Returns
+    /// 
+    /// If they are not compatible the driver will return false, otherwise it will return true.
+    fn ioctl_check_driver_compatibility(&mut self) -> bool {
+        if self.handle_via_path.handle.is_none() {
+            // try 1 more time
+            self.init_handle_via_registry();
+            if self.handle_via_path.handle.is_none() {
+                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                    Unable to pass IOCTL. Handle: {:?}. Exiting the driver.", 
+                    self.handle_via_path.handle
+                );
+                
+                // stop the driver then panic
+                self.stop_driver();
+
+                // todo in the future have some gui option instead of a panic
+                panic!("[-] Unable to communicate with the driver to check version compatibility, please try again.");
+            }
+        }
+
+        let mut response: bool = false;
+        let mut bytes_returned: u32 = 0;
+
+        let result = unsafe {
+            DeviceIoControl(
+                self.handle_via_path.handle.unwrap(),
+                SANC_IOCTL_CHECK_COMPATIBILITY,
+                Some(&VERSION_CLIENT as *const _ as *const c_void),
+                size_of_val(&VERSION_CLIENT) as u32,
+                Some(&mut response as *mut _ as *mut c_void),
+                size_of_val(&response) as u32,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+
+        // error checks
+        if let Err(e) = result {
+            eprintln!("[-] Error fetching version result from driver. {e}");
+            return false;
+        }
+        if bytes_returned == 0 {
+            eprintln!("[-] Error fetching version result from driver. Zero bytes returned from the driver.");
+            return false;
+        }
+
+        println!("[i] Response is: {}", response);
+
+        response
+    }
 
     /// Ping the driver from usermode
     pub fn ioctl_ping_driver(&mut self) {

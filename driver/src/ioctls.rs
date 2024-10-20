@@ -1,8 +1,10 @@
 use core::{ffi::c_void, ptr::null_mut};
 
-use shared::{constants::DRIVER_VER, ioctl::SancIoctlPing};
+use shared::{constants::SanctumVersion, ioctl::SancIoctlPing};
 use wdk::println;
-use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, DEVICE_OBJECT, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, STATUS_UNSUPPORTED_PAGING_MODE, _IO_STACK_LOCATION};
+use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, IO_STACK_LOCATION, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+
+use crate::utils::check_driver_version;
 
 struct IoctlBuffer {
     len: u32,
@@ -199,6 +201,41 @@ pub fn ioctl_handler_ping_return_struct(
     unsafe {
         RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer, &out_buf as *const _ as *const c_void, size_of_struct)
     };
+
+    Ok(())
+}
+
+
+/// Checks the compatibility of the driver version with client version. For all intents and purposes this can be 
+/// considered the real 'ping' with the current pings being POC for passing data between UM and KM.
+pub fn ioctl_check_driver_compatibility(
+    p_stack_location: *mut _IO_STACK_LOCATION,
+    pirp: PIRP,
+) -> Result<(), NTSTATUS> {
+
+    let mut ioctl_buffer = IoctlBuffer::new(p_stack_location, pirp);
+    ioctl_buffer.receive()?; // receive the data
+
+    let input_data = ioctl_buffer.buf as *const _ as *const SanctumVersion;
+    if input_data.is_null() {
+        println!("[sanctum] [-] Error receiving input data for checking driver compatibility.");
+        return Err(STATUS_UNSUCCESSFUL);
+    }
+
+    // validated the pointer, data should be safe to dereference
+    let input_data: &SanctumVersion = unsafe {&*input_data};
+
+    // check whether we are compatible
+    let response = check_driver_version(input_data);
+    println!("[sanctum] [i] Client version: {}.{}.{}, is compatible with driver version: {}.", input_data.major, input_data.minor, input_data.patch, response);
+
+    // prepare the data
+    let res_size = core::mem::size_of_val(&response) as u64;
+    unsafe { (*pirp).IoStatus.Information = res_size };
+
+    unsafe {
+        RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer, &response as *const bool as *const c_void, res_size);
+    }
 
     Ok(())
 }

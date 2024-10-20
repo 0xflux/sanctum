@@ -9,6 +9,12 @@ pub static SYS_INSTALL_RELATIVE_LOC: &str = "sanctum.sys";
 pub static SVC_NAME: &str = "Sanctum";
 
 // version info
+pub struct SanctumVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+
 pub static RELEASE_NAME: &str = "Sanctify";
-pub static USERMODE_VER: &str = "0.0.1";
-pub static DRIVER_VER: &str = "0.0.1";
+pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1 }; // 0.0.1 etc
+pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1 }; // 0.0.1 etc

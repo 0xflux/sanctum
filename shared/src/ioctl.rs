@@ -25,6 +25,9 @@ pub const SANC_IOCTL_PING: u32 =
 pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
     CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
+pub const SANC_IOCTL_CHECK_COMPATIBILITY: u32 =
+    CTL_CODE!(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
 
 // ****************** IOCTL MSG STRUCTS ******************
 
@@ -41,6 +44,7 @@ pub struct SancIoctlPing {
 const SANC_IOCTL_PING_CAPACITY: usize = 256;
 
 impl SancIoctlPing<> {
+    /// Create aa new instance of the object with default values
     pub fn new() -> SancIoctlPing {
         SancIoctlPing {
             received: false,
