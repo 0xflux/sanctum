@@ -30,8 +30,22 @@ pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
 
 /// Response to a hello ping from usermode, indicates whether the data was received, and the driver
 /// will respond with its current version.
-pub struct SancIoctlPing<'a> {
+pub struct SancIoctlPing {
     pub received: bool,
-    pub version: &'a[u8],
+    pub version: [u8; 256],
     pub str_len: usize,
+    pub capacity: usize,
+}
+
+impl SancIoctlPing<> {
+    pub fn new() -> SancIoctlPing {
+        const CAPACITY: usize = 256;
+
+        SancIoctlPing {
+            received: false,
+            version: [0; CAPACITY],
+            str_len: 0,
+            capacity: CAPACITY,
+        }
+    }
 }

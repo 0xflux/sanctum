@@ -1,5 +1,5 @@
 use core::str;
-use std::{ffi::c_void, ptr::null_mut};
+use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
     constants::{DRIVER_UM_NAME, SVC_NAME, SYS_INSTALL_RELATIVE_LOC},
@@ -389,17 +389,19 @@ impl SanctumDriverManager {
         //
         // If we have a handle
         //
+        let ver = "Hello from usermode!".as_bytes();        
+        let mut message = SancIoctlPing::new();
+        if ver.len() > message.capacity {
+            eprintln!("[-] Message too long for buffer.");
+            return;
+        }
 
+        // copy the message into the array
+        message.version[..ver.len()].copy_from_slice(ver);
+        message.str_len = ver.len();
+        message.received = true;
 
-        let ver = "0.0.1".as_bytes();
-        let message = SancIoctlPing {
-            received: true,
-            version: ver,
-            str_len: ver.len(),
-        };
-
-        const RESP_SIZE: u32 = 256; // todo
-        let mut response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
+        let mut response = SancIoctlPing::new();
         let mut bytes_returned: u32 = 0;
 
         // attempt the call
@@ -409,29 +411,28 @@ impl SanctumDriverManager {
                 SANC_IOCTL_PING_WITH_STRUCT,
                 Some(&message as *const _ as *const c_void),
                 std::mem::size_of_val(&message) as u32,
-                Some(response.as_mut_ptr() as *mut c_void),
-                RESP_SIZE,
+                Some(&mut response as *mut _ as *mut c_void),
+                std::mem::size_of_val(&response) as u32,
                 Some(&mut bytes_returned),
                 None,
             )
         };
 
         if let Err(e) = result {
-            eprintln!("Error from attempting IOCTL call. {e}");
+            eprintln!("[-] Error from attempting IOCTL call. {e}");
             return;
         }
 
-        println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
-
         // parse out the result
-        if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-            println!(
-                "[+] Bytes returned: {bytes_returned} response: {:#?}",
-                response
-            );
-        } else {
-            println!("[-] Error parsing response as UTF-8");
+        if bytes_returned == 0 {
+            eprintln!("[-] No bytes returned from DeviceIOControl");
+            return;
         }
+
+        let constructed = unsafe {from_raw_parts(response.version.as_ptr(), response.str_len)};
+
+        println!("[+] Response from driver: {}, {:?}", response.received, std::str::from_utf8(constructed));
+
     }
 }
 

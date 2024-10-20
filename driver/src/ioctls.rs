@@ -1,6 +1,6 @@
 use core::{ffi::c_void, ptr::null_mut};
 
-use shared::ioctl::SancIoctlPing;
+use shared::{constants::DRIVER_VER, ioctl::SancIoctlPing};
 use wdk::println;
 use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, DEVICE_OBJECT, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, STATUS_UNSUPPORTED_PAGING_MODE, _IO_STACK_LOCATION};
 
@@ -161,8 +161,10 @@ pub fn ioctl_handler_ping_return_struct(
     }
 
     let input_data = unsafe { &(*input_data) };
-    let txt = unsafe { core::slice::from_raw_parts(input_data.version.as_ptr() as *const u8, input_data.str_len) };
-    let txt = match core::str::from_utf8(txt) {
+
+    // construct the input str from the array
+    let input_str = unsafe { core::slice::from_raw_parts(input_data.version.as_ptr() as *const u8, input_data.str_len) };
+    let input_str = match core::str::from_utf8(input_str) {
         Ok(v) => v,
         Err(e) => {
             println!("[sanctum] [-] Error converting input slice to string. {e}");
@@ -170,7 +172,27 @@ pub fn ioctl_handler_ping_return_struct(
         },
     };
 
-    println!("[sanctum] [+] Input bool: {}, input str: {:#?}", input_data.received, txt);
+    println!("[sanctum] [+] Input bool: {}, input str: {:#?}", input_data.received, input_str);
+
+    // setup output 
+    let msg = b"Msg received from the Kernel!";
+    let mut out_buf = SancIoctlPing::new(); 
+    out_buf.received = true;
+    out_buf.version[..msg.len()].copy_from_slice(msg);
+    out_buf.str_len = msg.len();
+
+    unsafe { 
+        if (*pirp).AssociatedIrp.SystemBuffer.is_null() {
+            println!("[sanctum] [-] SystemBuffer is a null pointer.");
+            return Err(STATUS_UNSUCCESSFUL);
+        }
+    }
+    let size_of_struct = core::mem::size_of_val(&out_buf) as u64;
+    unsafe {(*pirp).IoStatus.Information = size_of_struct};
+
+    unsafe {
+        RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer, &out_buf as *const _ as *const c_void, size_of_struct)
+    };
 
     Ok(())
 }

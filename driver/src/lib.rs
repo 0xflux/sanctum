@@ -178,7 +178,6 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
                 println!("[sanctum] [-] Error: {e}");
                 e
             } else {
-                println!("[sanctum] [i] IOCTL complete.");
                 STATUS_SUCCESS
             }
         },
@@ -187,7 +186,6 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
                 println!("[sanctum] [-] Error: {e}");
                 e
             } else {
-                println!("[sanctum] [i] IOCTL complete.");
                 STATUS_SUCCESS
             }
         }
