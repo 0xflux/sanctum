@@ -177,6 +177,12 @@ pub fn ioctl_handler_ping_return_struct(
     // setup output 
     let msg = b"Msg received from the Kernel!";
     let mut out_buf = SancIoctlPing::new(); 
+
+    if msg.len() > out_buf.capacity {
+        println!("[sanctum] [-] Message too large to send back to usermode.");
+        return Err(STATUS_UNSUCCESSFUL);
+    }
+
     out_buf.received = true;
     out_buf.version[..msg.len()].copy_from_slice(msg);
     out_buf.str_len = msg.len();

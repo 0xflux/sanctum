@@ -32,20 +32,21 @@ pub const SANC_IOCTL_PING_WITH_STRUCT: u32 =
 /// will respond with its current version.
 pub struct SancIoctlPing {
     pub received: bool,
-    pub version: [u8; 256],
+    pub version: [u8; SANC_IOCTL_PING_CAPACITY],
     pub str_len: usize,
     pub capacity: usize,
 }
 
+/// The capacity maximum for the u8 buffer for the ping protocol
+const SANC_IOCTL_PING_CAPACITY: usize = 256;
+
 impl SancIoctlPing<> {
     pub fn new() -> SancIoctlPing {
-        const CAPACITY: usize = 256;
-
         SancIoctlPing {
             received: false,
-            version: [0; CAPACITY],
+            version: [0; SANC_IOCTL_PING_CAPACITY],
             str_len: 0,
-            capacity: CAPACITY,
+            capacity: SANC_IOCTL_PING_CAPACITY,
         }
     }
 }
