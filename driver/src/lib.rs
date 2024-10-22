@@ -1,4 +1,4 @@
-// Sanctum Windows Kernel Mode Driver (WDM) written in Rust
+// Sanctum Windows Kernel Mode Driver written in Rust
 // Date: 12/10/2024
 // Author: flux
 //      GH: https://github.com/0xflux
@@ -10,7 +10,8 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use core::{ptr::null_mut};
+use core::core_callback_notify_ps;
+use ::core::ptr::null_mut;
 
 use ffi::IoGetCurrentIrpStackLocation;
 use ioctls::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
@@ -23,9 +24,10 @@ use wdk_alloc::WdkAllocator;
 mod ffi;
 mod utils;
 mod ioctls;
+mod core;
 
 use wdk_sys::{
-    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION
+    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, PsSetCreateProcessNotifyRoutineEx}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FALSE, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, TRUE, _IO_STACK_LOCATION
 };
 
 #[cfg(not(test))]
@@ -68,6 +70,7 @@ pub unsafe extern "C" fn configure_driver(
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
 
+
     //
     // Create the device
     //
@@ -87,18 +90,7 @@ pub unsafe extern "C" fn configure_driver(
         return res;
     }
 
-    //
-    // Configure the drivers callbacks
-    //
-    (*driver).MajorFunction[IRP_MJ_CREATE as usize] = Some(sanctum_create_close); // todo can authenticate requests coming from x
-    (*driver).MajorFunction[IRP_MJ_CLOSE as usize] = Some(sanctum_create_close);
-    // (*driver).MajorFunction[IRP_MJ_WRITE as usize] = Some(handle_ioctl);
-    (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
-    (*driver).DriverUnload = Some(driver_exit);
-
-    // Specifies the type of buffering that is used by the I/O manager for I/O requests that are sent to the device stack.
-    (*device_object).Flags |= DO_BUFFERED_IO;
-
+    
     //
     // Create the symbolic link
     //
@@ -109,6 +101,35 @@ pub unsafe extern "C" fn configure_driver(
         driver_exit(driver); // cleanup any resources before returning
         return STATUS_UNSUCCESSFUL;
     }
+
+
+    //
+    // Configure the drivers callbacks
+    //
+    (*driver).MajorFunction[IRP_MJ_CREATE as usize] = Some(sanctum_create_close); // todo can authenticate requests coming from x
+    (*driver).MajorFunction[IRP_MJ_CLOSE as usize] = Some(sanctum_create_close);
+    // (*driver).MajorFunction[IRP_MJ_WRITE as usize] = Some(handle_ioctl);
+    (*driver).MajorFunction[IRP_MJ_DEVICE_CONTROL as usize] = Some(handle_ioctl);
+    (*driver).DriverUnload = Some(driver_exit);
+
+
+    //
+    // Core callback functions for the EDR
+    //
+
+    // Intercepting process creation
+    println!("[sanctum] [i] About to register.....");
+    let res = PsSetCreateProcessNotifyRoutineEx(Some(core_callback_notify_ps), FALSE as u8);
+    if res != STATUS_SUCCESS {
+        println!("[sanctum] [-] Unable to create device via IoCreateDevice. Failed with code: {res}.");
+        return res;
+    }
+
+    println!("[sanctum] [+] Done!");
+
+
+    // Specifies the type of buffering that is used by the I/O manager for I/O requests that are sent to the device stack.
+    (*device_object).Flags |= DO_BUFFERED_IO;
 
     STATUS_SUCCESS
 }
@@ -126,6 +147,14 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
         .to_windows_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
     let _ = unsafe { IoDeleteSymbolicLink(&mut device_name) };
+
+    //
+    // Unregister callback routines 
+    //
+    let res = unsafe { PsSetCreateProcessNotifyRoutineEx(Some(core_callback_notify_ps), TRUE as u8) };
+    if res != STATUS_SUCCESS {
+        println!("[sanctum] [-] Error removing PsSetCreateProcessNotifyRoutineEx from callback routines. Error: {res}");
+    }
 
     // delete the device
     unsafe { IoDeleteDevice((*driver).DeviceObject);}
@@ -197,7 +226,7 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
                 STATUS_SUCCESS
             }
         },
-        
+
         _ => {
             println!("[sanctum] [-] IOCTL control code: {} not implemented.", control_code);
             STATUS_UNSUCCESSFUL

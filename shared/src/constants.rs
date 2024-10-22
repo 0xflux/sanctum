@@ -2,7 +2,7 @@
 
 // these should end with the same name
 pub static NT_DEVICE_NAME: &str = "\\Device\\SanctumEDR";
-pub static DOS_DEVICE_NAME: &str = "\\DosDevices\\SanctumEDR";
+pub static DOS_DEVICE_NAME: &str = "\\??\\SanctumEDR";
 pub static DRIVER_UM_NAME: &str = "\\\\.\\SanctumEDR"; // \\.\ sets device namespace
 
 pub static SYS_INSTALL_RELATIVE_LOC: &str = "sanctum.sys";
