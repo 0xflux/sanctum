@@ -6,6 +6,8 @@
         "Addreg",
         "ASSOCSERVICE",
         "bindgen",
+        "filescanner",
+        "iocs",
         "IOCTLS",
         "Irql",
         "libcore",

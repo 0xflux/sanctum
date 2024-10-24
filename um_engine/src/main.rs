@@ -1,9 +1,11 @@
-use std::io;
+use std::{io, path::PathBuf};
 
 use driver_manager::SanctumDriverManager;
+use filescanner::FileScanner;
 
 mod driver_manager;
 mod strings;
+mod filescanner;
 
 fn main() {
     println!("[i] Sanctum usermode engine staring..");
@@ -37,6 +39,7 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
         println!("[5] Stop driver.");
         println!("[6] Ping driver and get string response.");
         println!("[7] Ping driver with a struct.");
+        println!("[8] Get file hash of hardcoded file.");
 
         let mut selection = String::new();
         if io::stdin().read_line(&mut selection).is_err() {
@@ -81,6 +84,22 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
             7 => {
                 driver_manager.ioctl_ping_driver_w_struct();
             },
+
+            8 => {
+                // scan a file against hashes
+                let scanner = FileScanner::from(PathBuf::from("MALWARE.ps1")).unwrap();
+                let res = match scanner.scan_against_hashes() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[-] Scanner error: {e}");
+                        None
+                    },
+                };
+
+                if let Some(r) = res {
+                    println!("[+] Malware found, Hash: {}, file name: {}", r.0, r.1.display());
+                }
+            }
 
             _ => {
                 eprintln!("[-] Unhandled command.");
