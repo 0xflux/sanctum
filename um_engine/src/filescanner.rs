@@ -3,13 +3,19 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::BTreeSet, fs::File, io::{self, BufRead, BufReader, Read}, path::PathBuf};
+use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read}, path::PathBuf};
 
 use sha2::{Sha256, Digest};
 
+/// Structure for containing results pertaining to an IOC match
+#[derive(Debug)]
+pub struct MatchedIOC {
+    hash: String,
+    file: PathBuf,
+}
+
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
 pub struct FileScanner {
-    target_file: Option<PathBuf>,
     // Using a BTreeSet for the IOCs as it has the best time complexity for searching - Rust's implementation in the stdlib
     // I don't think is the best optimised BTree out there, but it will do the job for now. Not adding any IOC metadata to this
     // list of hashes (aka turning this into a BTreeMap) as it's a waste of memory and that metadata can be looked up with automations
@@ -34,21 +40,9 @@ impl FileScanner {
 
         Ok(
             FileScanner {
-                target_file: None,
                 iocs: bts,
             }
         )
-    }
-
-
-    /// Construct a new instance of the FileScanner from a starting path.
-    pub fn from(path: PathBuf) -> Result<Self, io::Error> {
-
-        // first make a call to new to use that as a single point of initialisation
-        let mut scanner = FileScanner::new()?;
-        scanner.target_file = Some(path);
-
-        Ok(scanner)
     }
 
 
@@ -60,7 +54,7 @@ impl FileScanner {
     /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
     /// 
     /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    pub fn scan_against_hashes(&self) -> Result<Option<(String, PathBuf)>, std::io::Error>{
+    pub fn scan_file_against_hashes(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
         
         //
         // In order to not read the whole file into memory (would be bad if the file size is > the amount of RAM available)
@@ -68,7 +62,7 @@ impl FileScanner {
         // to update the hash values, this should produce the hash without requiring the whole file read into memory.
         //
 
-        let file = File::open(self.target_file.clone().unwrap())?;
+        let file = File::open(&target)?;
         let mut reader = BufReader::new(file);
 
         let hash = {
@@ -88,13 +82,77 @@ impl FileScanner {
         // check the BTreeSet
         if self.iocs.contains(hash.as_str()) {
             // if we have a match on the malware..
-            return Ok(Some((hash, self.target_file.clone().unwrap())));
+            return Ok(Some((hash, target)));
         }
 
         // No malware found
         Ok(None)
 
-    }   
+    }
+
+
+    // TODO do a folder scan next, maybe this could be a good pathway into a whole system scan
+    // perhaps this should have 'power' settings depending on resources etc?
+    /// Public API entry point, scans from a root folder including all children, this can be used on a small 
+    /// scale for a folder scan, or used to initiate a system scan.
+    pub fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error> {
+
+        if !target.is_dir() {
+            eprintln!("[-] Target {} is not a directory.", target.display());
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Target is not a directory."));
+        }
+
+        let mut matched_iocs: Vec<MatchedIOC> = Vec::new();
+        let mut discovered_dirs: Vec<PathBuf> = vec![target];
+
+        while !discovered_dirs.is_empty() {
+            // pop a directory
+            let target = discovered_dirs.pop();
+            if target.is_none() { continue; }
+
+            for entry in fs::read_dir(target.unwrap())? {
+                let entry = entry?;
+                let path = entry.path();
+
+                // todo some profiling here to see where the slowdowns are and if it can be improved
+                // i suspect large file size ingests is causing the difference in speed as it reads it
+                // into a buffer.
+                println!("[i] Path: {}", path.display());
+
+                // add the folder to the next iteration 
+                if path.is_dir() {
+                    discovered_dirs.push(path);
+                    continue; // keep searching for a file
+                }
+
+                //
+                // Check the file against the hashes, we are only interested in positive matches at this stage
+                //
+                match self.scan_file_against_hashes(path) {
+                    Ok(v) => {
+                        if v.is_some() {
+                            let v = v.unwrap();
+                            matched_iocs.push(MatchedIOC {
+                                hash: v.0,
+                                file: v.1,
+                            });
+                        }
+                    },
+                    Err(_) => todo!(),
+                }
+            }
+
+            println!("[+] Items remaining in queue: {}", discovered_dirs.len())
+        }
+
+        
+
+        Ok(matched_iocs)
+
+    }
+
+    // TODO schedule daily scans
+
 
 
 }

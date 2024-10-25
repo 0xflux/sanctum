@@ -13,11 +13,18 @@ fn main() {
     // init the driver manager
     let mut driver_manager: SanctumDriverManager = SanctumDriverManager::new();
 
+    // init scanner
+    let scanner = FileScanner::new();
+    if let Err(e) = scanner {
+        panic!("[-] Failed to initialise scanner: {e}.");
+    }
+    let scanner = scanner.unwrap();
+
     //
     // Loop through the menu until the user has selected exit
     // if exit is selected, then return out of main.
     //
-    if user_input_loop(&mut driver_manager).is_none() {
+    if user_input_loop(&mut driver_manager, &scanner).is_none() {
         return;
     };
 
@@ -28,7 +35,10 @@ fn main() {
 ///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
-fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
+fn user_input_loop(
+    driver_manager: &mut SanctumDriverManager,
+    scanner: &FileScanner
+) -> Option<()> {
     loop {
         println!("Make your selection below:");
         println!("------------------------------");
@@ -39,7 +49,8 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
         println!("[5] Stop driver.");
         println!("[6] Ping driver and get string response.");
         println!("[7] Ping driver with a struct.");
-        println!("[8] Get file hash of hardcoded file.");
+        println!("[8] Scan file for malware.");
+        println!("[9] Scan directory for malware.");
 
         let mut selection = String::new();
         if io::stdin().read_line(&mut selection).is_err() {
@@ -87,8 +98,7 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
 
             8 => {
                 // scan a file against hashes
-                let scanner = FileScanner::from(PathBuf::from("MALWARE.ps1")).unwrap();
-                let res = match scanner.scan_against_hashes() {
+                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("[-] Scanner error: {e}");
@@ -98,6 +108,17 @@ fn user_input_loop(driver_manager: &mut SanctumDriverManager) -> Option<()> {
 
                 if let Some(r) = res {
                     println!("[+] Malware found, Hash: {}, file name: {}", r.0, r.1.display());
+                }
+            }
+
+            9 => {
+                // scan a folder for malware
+                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("."));
+
+                if let Ok(results) = scan_results {
+                    if !results.is_empty() {
+                        println!("[+] Malware found: {:?}", results);
+                    }
                 }
             }
 
