@@ -3,7 +3,7 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read}, path::PathBuf};
+use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, path::PathBuf, time::Instant};
 
 use sha2::{Sha256, Digest};
 
@@ -104,14 +104,25 @@ impl FileScanner {
 
         let mut matched_iocs: Vec<MatchedIOC> = Vec::new();
         let mut discovered_dirs: Vec<PathBuf> = vec![target];
+        let mut time_map: BTreeMap<u128, PathBuf> = BTreeMap::new();
 
         while !discovered_dirs.is_empty() {
             // pop a directory
             let target = discovered_dirs.pop();
             if target.is_none() { continue; }
 
-            for entry in fs::read_dir(target.unwrap())? {
-                let entry = entry?;
+            // attempt to read the directory, if we don't have permission, continue to next item.
+            let read_dir = fs::read_dir(target.unwrap());
+            if read_dir.is_err() { continue; }
+
+            for entry in read_dir.unwrap() {
+                let entry = match entry {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("[-] Error with entry, e: {e}");
+                        continue;
+                    },
+                };
                 let path = entry.path();
 
                 // todo some profiling here to see where the slowdowns are and if it can be improved
@@ -128,7 +139,9 @@ impl FileScanner {
                 //
                 // Check the file against the hashes, we are only interested in positive matches at this stage
                 //
-                match self.scan_file_against_hashes(path) {
+                let pclone = path.clone();
+                let now = Instant::now();
+                match self.scan_file_against_hashes(pclone) {
                     Ok(v) => {
                         if v.is_some() {
                             let v = v.unwrap();
@@ -138,14 +151,21 @@ impl FileScanner {
                             });
                         }
                     },
-                    Err(_) => todo!(),
+                    Err(e) => eprintln!("[-] Error scanning dir: {e}"),
                 }
+
+                let elapsed = now.elapsed().as_millis();
+
+                time_map.insert(elapsed, path);
             }
 
-            println!("[+] Items remaining in queue: {}", discovered_dirs.len())
+            // println!("[+] Items remaining in queue: {}", discovered_dirs.len())
         }
 
-        
+        let min_val = time_map.iter().next().unwrap();
+        let max_val = time_map.iter().next_back().unwrap();
+
+        println!("[i] Min: {:?}, Max: {:?}", min_val, max_val);
 
         Ok(matched_iocs)
 

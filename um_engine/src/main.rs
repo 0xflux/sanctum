@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, time::Instant};
 
 use driver_manager::SanctumDriverManager;
 use filescanner::FileScanner;
@@ -27,8 +27,6 @@ fn main() {
     if user_input_loop(&mut driver_manager, &scanner).is_none() {
         return;
     };
-
-    // TO PORT FROM C :)
 }
 
 /// The main loop for accepting user input into the engine at the moment.
@@ -112,14 +110,23 @@ fn user_input_loop(
             }
 
             9 => {
+                let now = Instant::now();
                 // scan a folder for malware
-                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("."));
+                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
 
-                if let Ok(results) = scan_results {
-                    if !results.is_empty() {
-                        println!("[+] Malware found: {:?}", results);
+                match scan_results {
+                    Ok(results) => {
+                        if !results.is_empty() {
+                            println!("[+] Malware found: {:?}", results);
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("[-] Folder scan returned error: {e}");
                     }
                 }
+
+                let elapsed = now.elapsed().as_secs();
+                println!("[i] Took: {elapsed} secs. Mins: {}", elapsed * 60);
             }
 
             _ => {
