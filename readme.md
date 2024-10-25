@@ -28,7 +28,15 @@ The Windows Driver Kit (WDK) crate ecosystem provides essential tools that make 
 
 The EDR code is logically separated in one solution into the kernel mode driver (the driver folder [found here](https://github.com/0xflux/sanctum/tree/master/driver)), the usermode engine ([found here](https://github.com/0xflux/sanctum/tree/master/um_engine)), and usermode DLL (todo).
 
-# Current State / Features
+# Usermode features
+
+The usermode aspect of this application includes a GUI for you to use as a native windows program. 
+
+## File scanning for malware detection (IOC hash):
+
+![File scanning](imgs/evidence/av_scan_file.gif)
+
+# Driver features
 
 ## Basic IOCTL
 

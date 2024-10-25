@@ -31,7 +31,7 @@ impl FileScanner {
         // ingest latest IOC hash list
         //
         let mut bts: BTreeSet<String> = BTreeSet::new();
-        let file = File::open("./ioc_list.txt")?;
+        let file = File::open("../../ioc_list.txt")?;
         let lines = BufReader::new(file).lines();
 
         for line in lines.flatten() {
@@ -62,12 +62,13 @@ impl FileScanner {
         // to update the hash values, this should produce the hash without requiring the whole file read into memory.
         //
 
+        const BUF_SIZE: usize = 10240000; // read 10 MB at a time
         let file = File::open(&target)?;
         let mut reader = BufReader::new(file);
 
         let hash = {
             let mut hasher = Sha256::new();
-            let mut buf = [0; 1024];
+            let mut buf = [0; BUF_SIZE];
 
             loop {
                 let count = reader.read(&mut buf)?;

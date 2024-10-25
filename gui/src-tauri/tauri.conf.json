@@ -3,7 +3,8 @@
     "beforeBuildCommand": "",
     "beforeDevCommand": "",
     "devPath": "../ui",
-    "distDir": "../ui"
+    "distDir": "../ui",
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "Sanctum",
@@ -58,7 +59,7 @@
         "height": 600,
         "resizable": true,
         "title": "Sanctum",
-        "width": 800
+        "width": 1200
       }
     ]
   }

@@ -33,6 +33,11 @@ use crate::strings::ToUnicodeString;
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name
 /// and other critical settings.
+/// 
+/// # Safety
+/// 
+/// The structure implements Send and Sync for the Handle stored in DriverHandleRaii. This should be safe as all accesses to the driver handle
+/// will live for the lifetime of the object. If the handle could be null, the wrapping Option **should** be None.
 pub struct SanctumDriverManager {
     pub device_um_symbolic_link_name: Vec<u16>,
     svc_path: Vec<u16>,
@@ -51,13 +56,14 @@ impl SanctumDriverManager {
 
         let svc_path = get_sys_file_path();
         let svc_name = SVC_NAME.to_u16_vec();
+        let path_as_str = String::from_utf16_lossy(&svc_path);
 
         // check the sys file exists
         let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(svc_path.as_ptr())) };
         if x == INVALID_FILE_ATTRIBUTES {
-            panic!("[-] Cannot find sys file. Err: {}", unsafe {
+            panic!("[-] Cannot find sys file. Err: {}. Expected at: {}", unsafe {
                 GetLastError().0
-            });
+            }, path_as_str);
         }
 
         let mut instance = SanctumDriverManager {
@@ -508,6 +514,8 @@ impl Default for SanctumDriverManager {
     }
 }
 
+unsafe impl Send for SanctumDriverManager {}
+unsafe impl Sync for SanctumDriverManager {}
 
 pub struct DriverHandleRaii {
     pub handle: Option<HANDLE>,
@@ -643,7 +651,7 @@ fn get_sys_file_path() -> Vec<u16> {
         panic!("[-] Path of module is too long. Run from a location with a shorter path.");
     }
 
-    svc_path.truncate(len as usize - 13); // remove um_engine.sys\0
+    svc_path.truncate(len as usize - 11); // remove um_engine.sys\0
     svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file
 
     svc_path

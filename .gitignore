@@ -4,3 +4,4 @@
 /driver/.vscode/ # note you may want to symlink this relative
 driver/.vscode/settings.json
 *.bkp
+*.mp4

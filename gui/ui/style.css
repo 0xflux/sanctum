@@ -64,7 +64,11 @@ body {
 }
 
 p {
-    color: #555;
+    color: #232323;
+}
+
+#header p {
+    color: white;
 }
 
 nav ul {
@@ -74,22 +78,22 @@ nav ul {
 }
 
 nav ul a {
-    color: darkgreen;
+    color: #000130;
     text-decoration: none;
 }
 
 #header, #footer {
     font-size: large;
     padding: 0.3em;
-    background: #BCCE98;
+    background: #000130;
 }
 
 #left {
-    background: #DAE9BC;
+    background: #ffffff;
 }
 
 #right {
-    background: #F7FDEB;
+    background: #ffffff;
 }
 
 #center {
@@ -98,4 +102,10 @@ nav ul a {
 
 #container .column {
     padding-top: 1em;
+}
+
+div.full_callout {
+    width: 99%;
+    border: 1px solid #000130;
+    padding: 010px;
 }
