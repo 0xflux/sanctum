@@ -24,10 +24,9 @@ async fn start_individual_file_scan(filePath: String, engine: State<'_, Mutex<um
 	let engine_lock = engine.lock().await;
 	let res = engine_lock.scanner_scan_single_file(PathBuf::from(filePath)).await;
 
-	Ok(match res {
-		Some(v) => {
-			format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)
-		},
-		None => format!("Device clean!"),
-	})
+	match res {
+		Err(e) => Ok(format!("Error occurred whilst trying to scan file: {}", e)),
+		Ok(Some(v)) => Ok(format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)),
+		Ok(None) => Ok(format!("File clean!")),
+	}
 }

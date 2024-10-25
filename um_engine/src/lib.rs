@@ -52,17 +52,16 @@ impl UmEngine {
     }
 
 
-    /// Scans a single file as per the input filepath.
-    pub async fn scanner_scan_single_file(&self, target: PathBuf) -> Option<(String, PathBuf)>{
-        let res = match self.file_scanner.scan_file_against_hashes(target).await {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("[-] Scanner error: {e}");
-                None
-            },
-        };
-
-        res
+    /// Scans a single file as per the input filepath. 
+    /// 
+    /// # Returns
+    /// 
+    /// The function will return a tuple of Ok (String, PathBuf) if there were no IO errors, and the result of the Ok will be an Option of type
+    /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
+    /// 
+    /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
+    pub async fn scanner_scan_single_file(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, io::Error>{
+        self.file_scanner.scan_file_against_hashes(target).await
     }
 }
 
