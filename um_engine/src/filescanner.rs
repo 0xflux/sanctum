@@ -3,9 +3,11 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, path::PathBuf, time::Instant};
+use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, time::Instant};
 
 use sha2::{Sha256, Digest};
+
+use crate::filescanner;
 
 /// Structure for containing results pertaining to an IOC match
 #[derive(Debug)]
@@ -62,13 +64,37 @@ impl FileScanner {
         // to update the hash values, this should produce the hash without requiring the whole file read into memory.
         //
 
-        const BUF_SIZE: usize = 10240000; // read 10 MB at a time
         let file = File::open(&target)?;
-        let mut reader = BufReader::new(file);
+        let mut reader = BufReader::new(&file);
 
         let hash = {
             let mut hasher = Sha256::new();
-            let mut buf = vec![0u8; BUF_SIZE];
+
+            //
+            // We are going to put the file data as bytes onto the heap to prevent a stack buffer overrun, and in doing so
+            // we don't want to consume all the available memory. Therefore, we will limit the maximum heap allocation to
+            // 50 mb per file. If the file is of a size less than this, we will only heap allocate the amount of size needed
+            // otherwise, we will heap allocate 50 mb.
+            //
+
+            const MAX_HEAP_SIZE: usize = 500000000; // 50 mb
+
+            let alloc_size: usize = if let Ok(f) = file.metadata() {
+                let file_size = f.file_size() as usize;
+
+                if file_size < MAX_HEAP_SIZE {
+                    // less than 50 mb
+                    file_size
+                } else {
+                    MAX_HEAP_SIZE
+                }                    
+            } else {
+                // if there was an error getting the metadata, default to the max size
+                MAX_HEAP_SIZE
+            };
+
+
+            let mut buf = vec![0u8; alloc_size];
 
             loop {
                 let count = reader.read(&mut buf)?;
