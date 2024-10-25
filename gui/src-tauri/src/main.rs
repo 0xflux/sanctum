@@ -1,12 +1,14 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{path::PathBuf, sync::Mutex};
+use std::path::PathBuf;
 
 use tauri::State;
+use tokio::sync::Mutex;
 use um_engine::UmEngine;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 
 	let um_engine = UmEngine::new();
 	
@@ -18,14 +20,14 @@ fn main() {
 }
 
 #[tauri::command]
-fn start_individual_file_scan(filePath: String, engine: State<Mutex<um_engine::UmEngine>>) -> String {
-	let engine_lock = engine.lock().unwrap();
-	let res = engine_lock.scanner_scan_single_file(PathBuf::from(filePath));
+async fn start_individual_file_scan(filePath: String, engine: State<'_, Mutex<um_engine::UmEngine>>) -> Result<String, ()> {
+	let engine_lock = engine.lock().await;
+	let res = engine_lock.scanner_scan_single_file(PathBuf::from(filePath)).await;
 
-	match res {
+	Ok(match res {
 		Some(v) => {
 			format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)
 		},
 		None => format!("Device clean!"),
-	}
+	})
 }

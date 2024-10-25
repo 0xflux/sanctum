@@ -56,7 +56,7 @@ impl FileScanner {
     /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
     /// 
     /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    pub fn scan_file_against_hashes(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
+    pub async fn scan_file_against_hashes(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
         
         //
         // In order to not read the whole file into memory (would be bad if the file size is > the amount of RAM available)
@@ -118,11 +118,9 @@ impl FileScanner {
     }
 
 
-    // TODO do a folder scan next, maybe this could be a good pathway into a whole system scan
-    // perhaps this should have 'power' settings depending on resources etc?
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error> {
+    pub async fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error> {
 
         if !target.is_dir() {
             eprintln!("[-] Target {} is not a directory.", target.display());
@@ -168,7 +166,7 @@ impl FileScanner {
                 //
                 let pclone = path.clone();
                 let now = Instant::now();
-                match self.scan_file_against_hashes(pclone) {
+                match self.scan_file_against_hashes(pclone).await {
                     Ok(v) => {
                         if v.is_some() {
                             let v = v.unwrap();
@@ -199,7 +197,5 @@ impl FileScanner {
     }
 
     // TODO schedule daily scans
-
-
 
 }

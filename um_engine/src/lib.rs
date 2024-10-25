@@ -53,8 +53,8 @@ impl UmEngine {
 
 
     /// Scans a single file as per the input filepath.
-    pub fn scanner_scan_single_file(&self, target: PathBuf) -> Option<(String, PathBuf)>{
-        let res = match self.file_scanner.scan_file_against_hashes(target) {
+    pub async fn scanner_scan_single_file(&self, target: PathBuf) -> Option<(String, PathBuf)>{
+        let res = match self.file_scanner.scan_file_against_hashes(target).await {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("[-] Scanner error: {e}");
@@ -71,7 +71,7 @@ impl UmEngine {
 ///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
-fn user_input_loop(
+async fn user_input_loop(
     driver_manager: &mut SanctumDriverManager,
     scanner: &FileScanner
 ) -> Option<()> {
@@ -134,7 +134,7 @@ fn user_input_loop(
 
             8 => {
                 // scan a file against hashes
-                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
+                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")).await {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("[-] Scanner error: {e}");
@@ -150,7 +150,7 @@ fn user_input_loop(
             9 => {
                 let now = Instant::now();
                 // scan a folder for malware
-                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
+                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\")).await;
 
                 match scan_results {
                     Ok(results) => {
