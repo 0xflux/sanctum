@@ -68,7 +68,7 @@ impl FileScanner {
 
         let hash = {
             let mut hasher = Sha256::new();
-            let mut buf = [0; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
 
             loop {
                 let count = reader.read(&mut buf)?;
