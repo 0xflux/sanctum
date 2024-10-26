@@ -118,3 +118,7 @@ div.full_callout input {
 div.full_callout button {
     width: 12%;
 }
+
+p.error_msg {
+    color: crimson;
+}

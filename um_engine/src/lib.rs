@@ -1,7 +1,10 @@
-use std::{io, path::PathBuf, time::Instant};
+#![feature(io_error_uncategorized)]
+use std::{io, path::PathBuf, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::{Duration, Instant}};
 
 use driver_manager::SanctumDriverManager;
-use filescanner::FileScanner;
+use filescanner::{FileScanner, ScanningLiveInfo};
+pub use filescanner::State;
+pub use filescanner::MatchedIOC;
 
 mod driver_manager;
 mod strings;
@@ -19,8 +22,9 @@ mod filescanner;
 /// - scanner_ => Any functionality for file scanning etc shall be prefixed with scanner_
 /// - driver_ => Any functionality for driver interaction shall be prefixed with driver_
 pub struct UmEngine {
-    driver_manager: SanctumDriverManager,   // the interface for managing the driver
-    file_scanner: FileScanner,              // interface for the file scanning module
+    pub driver_manager: SanctumDriverManager,   // the interface for managing the driver
+    pub file_scanner: FileScanner,
+    is_scanning: AtomicBool,
 }
 
 impl UmEngine {
@@ -34,7 +38,7 @@ impl UmEngine {
         // Config setup
         //
 
-        // driver ma nager
+        // driver manager
         let mut driver_manager: SanctumDriverManager = SanctumDriverManager::new();
 
         // scanner module
@@ -48,9 +52,23 @@ impl UmEngine {
         UmEngine{
             driver_manager,
             file_scanner,
+            is_scanning: AtomicBool::new(false),
         }
     }
 
+
+    /// Will attempt to start a scan checking whether it is currently scanning 
+    fn try_start_scan(&self) -> Result<(), String> {
+        if self.is_scanning.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+            Ok(())
+        } else {
+            Err("A scan is already in progress.".to_string())
+        }
+    }
+
+    fn end_scan(&self) {
+        self.is_scanning.store(false, Ordering::SeqCst);
+    }
 
     /// Scans a single file as per the input filepath. 
     /// 
@@ -60,8 +78,29 @@ impl UmEngine {
     /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
     /// 
     /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    pub async fn scanner_scan_single_file(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, io::Error>{
-        self.file_scanner.scan_file_against_hashes(target).await
+    pub fn scanner_scan_single_file(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, io::Error>{
+
+        if self.try_start_scan().is_err() {
+            return Err(io::Error::new(io::ErrorKind::Uncategorized, "A scan is already taking place."));
+        }
+
+        let result = self.file_scanner.scan_file_against_hashes(target);
+        self.end_scan();
+
+        result
+    }
+
+
+    pub fn scanner_scan_directory(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error>{
+
+        if self.try_start_scan().is_err() {
+            return Err(io::Error::new(io::ErrorKind::Uncategorized, "A scan is already taking place."));
+        }
+
+        let result = self.file_scanner.scan_from_folder_all_children(target);
+        self.end_scan();
+
+        result
     }
 }
 
@@ -70,7 +109,7 @@ impl UmEngine {
 ///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
-async fn user_input_loop(
+fn user_input_loop(
     driver_manager: &mut SanctumDriverManager,
     scanner: &FileScanner
 ) -> Option<()> {
@@ -133,7 +172,7 @@ async fn user_input_loop(
 
             8 => {
                 // scan a file against hashes
-                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")).await {
+                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("[-] Scanner error: {e}");
@@ -149,7 +188,7 @@ async fn user_input_loop(
             9 => {
                 let now = Instant::now();
                 // scan a folder for malware
-                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\")).await;
+                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
 
                 match scan_results {
                     Ok(results) => {

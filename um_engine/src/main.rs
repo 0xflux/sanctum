@@ -7,8 +7,7 @@ mod driver_manager;
 mod strings;
 mod filescanner;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     println!("[i] Sanctum usermode engine staring..");
 
     // driver ma nager
@@ -25,7 +24,7 @@ async fn main() {
     // Loop through the menu until the user has selected exit
     // if exit is selected, then return out of main.
     //
-    if user_input_loop(&mut driver_manager, &file_scanner).await.is_none() {
+    if user_input_loop(&mut driver_manager, &file_scanner).is_none() {
         return;
     };
 }
@@ -34,7 +33,7 @@ async fn main() {
 ///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
-async fn user_input_loop(
+fn user_input_loop(
     driver_manager: &mut SanctumDriverManager,
     scanner: &FileScanner
 ) -> Option<()> {
@@ -97,7 +96,7 @@ async fn user_input_loop(
 
             8 => {
                 // scan a file against hashes
-                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")).await {
+                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("[-] Scanner error: {e}");
@@ -113,7 +112,7 @@ async fn user_input_loop(
             9 => {
                 let now = Instant::now();
                 // scan a folder for malware
-                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\")).await;
+                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
 
                 match scan_results {
                     Ok(results) => {

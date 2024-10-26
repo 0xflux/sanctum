@@ -7,14 +7,14 @@ use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{sel
 
 use sha2::{Sha256, Digest};
 use shared::constants::IOC_LIST_LOCATION;
-
-use crate::filescanner;
+use serde::{Deserialize, Serialize};
 
 /// Structure for containing results pertaining to an IOC match
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+
 pub struct MatchedIOC {
-    hash: String,
-    file: PathBuf,
+    pub hash: String,
+    pub file: PathBuf,
 }
 
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
@@ -25,20 +25,22 @@ pub struct FileScanner {
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
     // The state of the scanner so we can lock it whilst scanning
-    state: State,
+    pub state: State,
 }
 
 /// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
 /// further information about the live-time information such as how many files have been scanned and time taken so far.
-enum State {
+#[derive(PartialEq, Debug)]
+pub enum State {
     Scanning(ScanningLiveInfo),
     Inactive,
 }
 
 /// Live time information about the current scan
-struct ScanningLiveInfo {
-    num_files_scanned: u128,
-    time_taken: Duration,
+#[derive(PartialEq, Debug)]
+pub struct ScanningLiveInfo {
+    pub num_files_scanned: u128,
+    pub time_taken: Duration,
 }
 
 impl FileScanner {
@@ -64,6 +66,14 @@ impl FileScanner {
         )
     }
 
+    pub fn is_scanning(&self) -> bool {
+        if self.state == State::Inactive {
+            return false;
+        }
+
+        true
+    }
+
 
     /// Scan the file held by the FileScanner against a set of known bad hashes
     /// 
@@ -73,8 +83,7 @@ impl FileScanner {
     /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
     /// 
     /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    pub async fn scan_file_against_hashes(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
-        
+    pub fn scan_file_against_hashes(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
         //
         // In order to not read the whole file into memory (would be bad if the file size is > the amount of RAM available)
         // I've decided to loop over an array of 1024 bytes at at time until the end of the file, and use the hashing crate sha2
@@ -137,7 +146,7 @@ impl FileScanner {
 
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub async fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error> {
+    pub fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error> {
 
         if !target.is_dir() {
             eprintln!("[-] Target {} is not a directory.", target.display());
@@ -183,7 +192,7 @@ impl FileScanner {
                 //
                 let pclone = path.clone();
                 let now = Instant::now();
-                match self.scan_file_against_hashes(pclone).await {
+                match self.scan_file_against_hashes(pclone) {
                     Ok(v) => {
                         if v.is_some() {
                             let v = v.unwrap();

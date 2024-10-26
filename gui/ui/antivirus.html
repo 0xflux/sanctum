@@ -1,81 +1,166 @@
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="stylesheet" href="style.css">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Document</title>
-		<script src="nav.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<link rel="stylesheet" href="style.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Document</title>
+	<script src="nav.js"></script>
 
-		<script>
-		document.addEventListener("DOMContentLoaded", function() {
-			const { invoke } = window.__TAURI__.tauri;
+	<script>
+	document.addEventListener("DOMContentLoaded", function() {
 
-			var on_form_submit = function(event) {
-				event.preventDefault();
-				const filePath = document.getElementById("file_path_input").value; // Renamed to `filePath`
+		const { invoke } = window.__TAURI__.tauri;
+    	const { listen } = window.__TAURI__.event;
 
-				invoke('start_individual_file_scan', { filePath: filePath }) // Use `filePath`
-					.then((response) => {
-						console.log("Response from Rust:", response);
-						document.getElementById("single_file_scan_result").innerHTML = response;
-					})
-					.catch((error) => console.error("Invoke error:", error));
-			};
+		//
+		// Listeners
+		//
 
-			var form = document.getElementById("file_scan_form");
-			form.addEventListener('submit', on_form_submit, false);
+		// scan complete from backend
+		listen("scan_complete", function (scanEvent) {
+			const scanResult = scanEvent.payload;
+			console.log("Scan result received:", scanResult);
+
+			document.getElementById("single_file_scan_result").innerHTML = scanResult;
+			document.getElementById("single_file_scan_error").innerHTML = "";
 		});
-		</script>
+		// error from single file scan
+		listen("scan_error", function (scanEvent) {
+			const scanResult = scanEvent.payload;
 
-	</head>
-	<body>
-		<header id="header"><p>Sanctum Home EDR</p></header>
+			document.getElementById("single_file_scan_error").innerHTML = scanResult;
+		});
 
-		<div id="container">
+		// scan complete for folder - no results
+		listen("folder_scan_no_results", function (scanEvent) {
+			const scanResult = scanEvent.payload;
 
-			<main id="center" class="column">
-				<article>
-					<h1>Antivirus</h1>
-					<p>The usermode antivirus module. More than 'just' an antivirus, gives you detailed reports
-						relating to malware.
-					</p>
+			document.getElementById("folder_scan_result").innerHTML = scanResult;
+			document.getElementById("folder_scan_err").innerHTML = "";
+		});
+		// scan complete for folder - malware
+		listen("folder_scan_malware_found", function (scanEvent) {
+			const scanResult = scanEvent.payload;
 
-					<!-- Single file scan -->
-					<div class="full_callout">
-						<b>Individual file scan</b>
-						<p>Enter the file path for the file you wish to scan...</p>
-						<form action="#" id="file_scan_form">
-							<input type="text" placeholder="Enter file path" id="file_path_input" />
-							<button type="submit">Scan!</button>
-							<p id="single_file_scan_result"></p>
-						</form>
-					</div>
+			console.log("Scan result received:", scanResult);
 
-					<!-- Folder scan -->
-					<div class="full_callout">
-						<b>Folder / full disk scan</b>
-						<p>Enter the directory root you wish to scan, if you wish to scan the full filesystem you should indicate the drive letter, such as C:\. At the moment this doesn't support scanning all connected drives from the push of a button.</p>
-						<form action="#" id="folder_scan_form">
-							<input type="text" placeholder="Enter folder path" id="folder_path_input" />
-							<button type="submit">Scan!</button>
-							<p id="folder_scan_result"></p>
-						</form>
-					</div>
+			const resultContainer = document.getElementById("folder_scan_result");
+    		resultContainer.innerHTML = ""; 
 
-				</article>
-			</main>
+			// iterate through the results and print as a new paragraph
+			scanResult.forEach((result) => {
+				const resultItem = document.createElement("p");
+				resultItem.textContent = `Malware found. File: ${result.file}, Hash: ${result.hash}`;
+				resultContainer.appendChild(resultItem);
+			});
 
-			<div id="nav-placeholder"></div>
+			document.getElementById("folder_scan_err").innerHTML = "";
+		});
+		// scan complete for folder - error
+		listen("folder_scan_error", function (scanEvent) {
+			const scanResult = scanEvent.payload;
 
-			<div id="right" class="column">
-				<p> </p>
-			</div>
+			document.getElementById("folder_scan_err").innerHTML = scanResult;
+		});
 
+
+		//
+		// Events
+		//
+
+		// submitting a single file for analysis
+		var submit_single_file_for_scan = function(event) {
+			event.preventDefault();
+			const filePath = document.getElementById("file_path_input").value;
+
+			invoke('start_individual_file_scan', { filePath: filePath })
+				.then((response) => {
+					document.getElementById("single_file_scan_result").innerHTML = response;
+				})
+				.catch((error) => console.error("Invoke error:", error));
+		};
+
+		// submitting a folder for analysis
+		var submit_folder_for_scan = function(event) {
+			event.preventDefault();
+			const file_path = document.getElementById("folder_path_input").value;
+
+			invoke('start_folder_scan', { filePath: file_path })
+				.then((response) => {
+					document.getElementById("folder_scan_result").innerHTML = response;
+				})
+				.catch((error) => console.error("Invoke error:", error));
+		};
+
+
+
+		//
+		// Event listeners
+		//
+
+		// submit single file for analysis
+		var single_file_form = document.getElementById("file_scan_form");
+		single_file_form.addEventListener('submit', submit_single_file_for_scan, false);
+
+		// submit folder for analysis
+		var folder_submission_form = document.getElementById("folder_scan_form");
+		folder_submission_form.addEventListener('submit', submit_folder_for_scan, false);
+
+
+	});
+	</script>
+
+</head>
+<body>
+	<header id="header"><p>Sanctum Home EDR</p></header>
+
+	<div id="container">
+
+		<main id="center" class="column">
+			<article>
+				<h1>Antivirus</h1>
+				<p>The usermode antivirus module. More than 'just' an antivirus, gives you detailed reports
+					relating to malware.
+				</p>
+
+				<!-- Single file scan -->
+				<div class="full_callout">
+					<b>Individual file scan</b>
+					<p>Enter the file path for the file you wish to scan...</p>
+					<form action="#" id="file_scan_form">
+						<input type="text" placeholder="Enter file path" id="file_path_input" />
+						<button type="submit">Scan!</button>
+						<p id="single_file_scan_result"></p>
+						<p id="single_file_scan_error" class="error_msg"></p>
+					</form>
+				</div>
+
+				<!-- Folder scan -->
+				<div class="full_callout">
+					<b>Folder / full disk scan</b>
+					<p>Enter the directory root you wish to scan, if you wish to scan the full filesystem you should indicate the drive letter, such as C:\. At the moment this doesn't support scanning all connected drives from the push of a button.</p>
+					<form action="#" id="folder_scan_form">
+						<input type="text" placeholder="Enter folder path" id="folder_path_input" />
+						<button type="submit">Scan!</button>
+						<p id="folder_scan_result"></p>
+						<p id="folder_scan_err"></p>
+					</form>
+				</div>
+
+			</article>
+		</main>
+
+		<div id="nav-placeholder"></div>
+
+		<div id="right" class="column">
+			<p> </p>
 		</div>
 
-		<!-- <div id="footer-wrapper">
-			<footer id="footer"><p>Footer...</p></footer>
-		</div> -->
-	</body>
-	</html>
+	</div>
+
+	<!-- <div id="footer-wrapper">
+		<footer id="footer"><p>Footer...</p></footer>
+	</div> -->
+</body>
+</html>
