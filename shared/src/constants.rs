@@ -1,4 +1,4 @@
-// Constant literals (or types not part of the Windows API) for use across the project
+//! Constant literals (or types not part of the Windows API) for use across the project
 
 // these should end with the same name
 pub static NT_DEVICE_NAME: &str = "\\Device\\SanctumEDR";
@@ -18,3 +18,7 @@ pub struct SanctumVersion {
 pub static RELEASE_NAME: &str = "Sanctify";
 pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1 }; // 0.0.1 etc
 pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1 }; // 0.0.1 etc
+
+// Usermode specific constants
+pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\target\\debug\\sanctum.sys";
+pub static IOC_LIST_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\ioc_list.txt";

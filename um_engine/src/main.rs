@@ -11,21 +11,21 @@ mod filescanner;
 async fn main() {
     println!("[i] Sanctum usermode engine staring..");
 
-    // init the driver manager
+    // driver ma nager
     let mut driver_manager: SanctumDriverManager = SanctumDriverManager::new();
 
-    // init scanner
+    // scanner module
     let scanner = FileScanner::new();
     if let Err(e) = scanner {
         panic!("[-] Failed to initialise scanner: {e}.");
     }
-    let scanner = scanner.unwrap();
+    let file_scanner = scanner.unwrap();
 
     //
     // Loop through the menu until the user has selected exit
     // if exit is selected, then return out of main.
     //
-    if user_input_loop(&mut driver_manager, &scanner).await.is_none() {
+    if user_input_loop(&mut driver_manager, &file_scanner).await.is_none() {
         return;
     };
 }

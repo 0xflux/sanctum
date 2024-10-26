@@ -108,4 +108,13 @@ div.full_callout {
     width: 99%;
     border: 1px solid #000130;
     padding: 010px;
+    margin-bottom: 20px;
+}
+
+div.full_callout input {
+    width: 85%;
+}
+
+div.full_callout button {
+    width: 12%;
 }

@@ -3,9 +3,10 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, time::Instant};
+use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, time::{Duration, Instant}};
 
 use sha2::{Sha256, Digest};
+use shared::constants::IOC_LIST_LOCATION;
 
 use crate::filescanner;
 
@@ -23,6 +24,21 @@ pub struct FileScanner {
     // list of hashes (aka turning this into a BTreeMap) as it's a waste of memory and that metadata can be looked up with automations
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
+    // The state of the scanner so we can lock it whilst scanning
+    state: State,
+}
+
+/// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
+/// further information about the live-time information such as how many files have been scanned and time taken so far.
+enum State {
+    Scanning(ScanningLiveInfo),
+    Inactive,
+}
+
+/// Live time information about the current scan
+struct ScanningLiveInfo {
+    num_files_scanned: u128,
+    time_taken: Duration,
 }
 
 impl FileScanner {
@@ -33,7 +49,7 @@ impl FileScanner {
         // ingest latest IOC hash list
         //
         let mut bts: BTreeSet<String> = BTreeSet::new();
-        let file = File::open("../../ioc_list.txt")?;
+        let file = File::open(IOC_LIST_LOCATION)?;
         let lines = BufReader::new(file).lines();
 
         for line in lines.flatten() {
@@ -43,6 +59,7 @@ impl FileScanner {
         Ok(
             FileScanner {
                 iocs: bts,
+                state: State::Inactive,
             }
         )
     }

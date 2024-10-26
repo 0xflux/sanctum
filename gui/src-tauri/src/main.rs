@@ -24,6 +24,9 @@ async fn start_individual_file_scan(filePath: String, engine: State<'_, Mutex<um
 	let engine_lock = engine.lock().await;
 	let res = engine_lock.scanner_scan_single_file(PathBuf::from(filePath)).await;
 
+	// todo some kind of feedback like 1/1 file scanned; but then same for the mass scanner, be good to show x files scanned, and time taken so far. Then completed time and 
+	// total files after.
+
 	match res {
 		Err(e) => Ok(format!("Error occurred whilst trying to scan file: {}", e)),
 		Ok(Some(v)) => Ok(format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)),

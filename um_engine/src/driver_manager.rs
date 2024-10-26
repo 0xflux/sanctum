@@ -2,7 +2,7 @@ use core::str;
 use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
-    constants::{DRIVER_UM_NAME, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
+    constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
     ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
 use windows::{
@@ -54,7 +54,7 @@ impl SanctumDriverManager {
         // let device_name_path = DEVICE_NAME_PATH.to_u16_vec();
         let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
 
-        let svc_path = get_sys_file_path();
+        let svc_path = SANC_SYS_FILE_LOCATION.to_u16_vec();
         let svc_name = SVC_NAME.to_u16_vec();
         let path_as_str = String::from_utf16_lossy(&svc_path);
 
