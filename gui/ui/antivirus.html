@@ -13,6 +13,7 @@
 		const { invoke } = window.__TAURI__.tauri;
     	const { listen } = window.__TAURI__.event;
 
+
 		//
 		// Listeners
 		//
@@ -29,6 +30,7 @@
 		listen("scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
+			document.getElementById("single_file_scan_result").innerHTML = "" // blank the "started scan" msg
 			document.getElementById("single_file_scan_error").innerHTML = scanResult;
 		});
 
@@ -61,6 +63,7 @@
 		listen("folder_scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
+			document.getElementById("folder_scan_result").innerHTML = "" // blank the "started scan" msg
 			document.getElementById("folder_scan_err").innerHTML = scanResult;
 		});
 
@@ -92,7 +95,6 @@
 				})
 				.catch((error) => console.error("Invoke error:", error));
 		};
-
 
 
 		//
@@ -130,7 +132,7 @@
 					<p>Enter the file path for the file you wish to scan...</p>
 					<form action="#" id="file_scan_form">
 						<input type="text" placeholder="Enter file path" id="file_path_input" />
-						<button type="submit">Scan!</button>
+						<button type="submit" class="single_box_button">Scan!</button>
 						<p id="single_file_scan_result"></p>
 						<p id="single_file_scan_error" class="error_msg"></p>
 					</form>
@@ -142,7 +144,7 @@
 					<p>Enter the directory root you wish to scan, if you wish to scan the full filesystem you should indicate the drive letter, such as C:\. At the moment this doesn't support scanning all connected drives from the push of a button.</p>
 					<form action="#" id="folder_scan_form">
 						<input type="text" placeholder="Enter folder path" id="folder_path_input" />
-						<button type="submit">Scan!</button>
+						<button type="submit" class="single_box_button">Scan!</button>
 						<p id="folder_scan_result"></p>
 						<p id="folder_scan_err"></p>
 					</form>

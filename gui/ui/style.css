@@ -115,7 +115,7 @@ div.full_callout input {
     width: 85%;
 }
 
-div.full_callout button {
+div.full_callout button.single_box_button {
     width: 12%;
 }
 
