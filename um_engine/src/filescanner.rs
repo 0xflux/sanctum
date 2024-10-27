@@ -3,11 +3,22 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, time::{Duration, Instant}};
+use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
 
 use sha2::{Sha256, Digest};
 use shared::constants::IOC_LIST_LOCATION;
 use serde::{Deserialize, Serialize};
+
+pub enum ScanType {
+    File,
+    Folder,
+}
+
+pub enum ScanResult {
+    FileResult(Result<Option<(String, PathBuf)>, io::Error>),
+    DirectoryResult(Result<Vec<MatchedIOC>, io::Error>),
+    ScanInProgress,
+}
 
 /// Structure for containing results pertaining to an IOC match
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,13 +30,18 @@ pub struct MatchedIOC {
 
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
 pub struct FileScanner {
+    // iocs:
     // Using a BTreeSet for the IOCs as it has the best time complexity for searching - Rust's implementation in the stdlib
     // I don't think is the best optimised BTree out there, but it will do the job for now. Not adding any IOC metadata to this
     // list of hashes (aka turning this into a BTreeMap) as it's a waste of memory and that metadata can be looked up with automations
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
-    // The state of the scanner so we can lock it whilst scanning
+    // state - The state of the scanner so we can lock it whilst scanning
     pub state: State,
+    // is_cancelled - An internal flag to indicate whether the job is cancelled or not from the GUI
+    is_cancelled: AtomicBool,
+    // is_scanning: An internal flag to indicate whether a scan is taking place - only 1 scan at a time atm.
+    is_scanning: AtomicBool,
 }
 
 /// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
@@ -34,6 +50,7 @@ pub struct FileScanner {
 pub enum State {
     Scanning(ScanningLiveInfo),
     Inactive,
+    Cancelled,
 }
 
 /// Live time information about the current scan
@@ -62,16 +79,40 @@ impl FileScanner {
             FileScanner {
                 iocs: bts,
                 state: State::Inactive,
+                is_cancelled: AtomicBool::new(false),
+                is_scanning: AtomicBool::new(false),
             }
         )
     }
 
-    pub fn is_scanning(&self) -> bool {
-        if self.state == State::Inactive {
-            return false;
-        }
 
-        true
+    /// Cancels the current scan
+    pub fn cancel_scan(&mut self) {
+        self.is_cancelled.store(true, Ordering::SeqCst);
+        self.is_scanning.store(false, Ordering::SeqCst); // update state
+    }
+
+
+    pub fn scan_started(&self) {
+        self.is_scanning.store(true, Ordering::SeqCst);
+    }
+
+
+    /// Checks whether a scan is in progress
+    pub fn is_scanning(&self) -> bool {
+        self.is_scanning.load(Ordering::SeqCst)
+    }
+
+
+    /// Checks whether the scan is cancelled, returning a bool
+    fn is_cancelled(&self) -> bool {
+        self.is_cancelled.load(Ordering::SeqCst)
+    }
+
+
+    /// Updates the internal is_scanning state to false
+    pub fn end_scan(&self) {
+        self.is_scanning.store(false, Ordering::SeqCst);
     }
 
 
@@ -92,6 +133,8 @@ impl FileScanner {
 
         let file = File::open(&target)?;
         let mut reader = BufReader::new(&file);
+
+        println!("[i] Scanning: {}", target.display());
 
         let hash = {
             let mut hasher = Sha256::new();
@@ -121,8 +164,22 @@ impl FileScanner {
 
 
             let mut buf = vec![0u8; alloc_size];
-
+            
+            //
+            // ingest the file and update hash value per chunk(if chunking)
+            //
             loop {
+                //
+                // This is a sensible place to check whether the user has cancelled the scan, anything before this is likely
+                // too short a time period to have the user stop the scan.
+                //
+                // Putting this in the loop makes sense (in the event of a large file)
+                //
+                if self.is_cancelled() {
+                    // todo update the error type of this fn to something more flexible
+                    return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+                }
+
                 let count = reader.read(&mut buf)?;
                 if count == 0 {break;}
                 hasher.update(&buf[..count]);
@@ -158,6 +215,13 @@ impl FileScanner {
         let mut time_map: BTreeMap<u128, PathBuf> = BTreeMap::new();
 
         while !discovered_dirs.is_empty() {
+
+            // check whether teh scan is cancelled
+            if self.is_cancelled() {
+                // todo update the error type of this fn to something more flexible
+                return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+            }
+
             // pop a directory
             let target = discovered_dirs.pop();
             if target.is_none() { continue; }
@@ -209,8 +273,6 @@ impl FileScanner {
 
                 time_map.insert(elapsed, path);
             }
-
-            // println!("[+] Items remaining in queue: {}", discovered_dirs.len())
         }
 
         let min_val = time_map.iter().next().unwrap();
@@ -221,7 +283,5 @@ impl FileScanner {
         Ok(matched_iocs)
 
     }
-
-    // TODO schedule daily scans
 
 }

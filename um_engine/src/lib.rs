@@ -3,8 +3,7 @@ use std::{io, path::PathBuf, sync::atomic::{AtomicBool, Ordering}, time::Instant
 
 use driver_manager::SanctumDriverManager;
 use filescanner::FileScanner;
-pub use filescanner::State;
-pub use filescanner::MatchedIOC;
+pub use filescanner::{State, MatchedIOC, ScanResult, ScanType};
 
 mod driver_manager;
 mod strings;
@@ -24,7 +23,6 @@ mod filescanner;
 pub struct UmEngine {
     pub driver_manager: SanctumDriverManager,   // the interface for managing the driver
     pub file_scanner: FileScanner,
-    is_scanning: AtomicBool,
 }
 
 impl UmEngine {
@@ -52,55 +50,38 @@ impl UmEngine {
         UmEngine{
             driver_manager,
             file_scanner,
-            is_scanning: AtomicBool::new(false),
         }
     }
 
 
-    /// Will attempt to start a scan checking whether it is currently scanning 
-    fn try_start_scan(&self) -> Result<(), String> {
-        if self.is_scanning.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-            Ok(())
-        } else {
-            Err("A scan is already in progress.".to_string())
-        }
-    }
-
-    fn end_scan(&self) {
-        self.is_scanning.store(false, Ordering::SeqCst);
-    }
-
-    /// Scans a single file as per the input filepath. 
+    /// Public entrypoint for scanning, taking in a target file / folder, and the scan type.
+    /// 
+    /// This function ensures all state is accurate for whether a scan is in progress etc.
     /// 
     /// # Returns
     /// 
-    /// The function will return a tuple of Ok (String, PathBuf) if there were no IO errors, and the result of the Ok will be an Option of type
-    /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
-    /// 
-    /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    pub fn scanner_scan_single_file(&self, target: PathBuf) -> Result<Option<(String, PathBuf)>, io::Error>{
-
-        if self.try_start_scan().is_err() {
-            return Err(io::Error::new(io::ErrorKind::Uncategorized, "A scan is already taking place."));
+    /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
+    /// allowing the function to conduct different types of scan. This will need checking in the calling function.
+    pub fn scanner_start_scan(&self, target: PathBuf, scan_type: ScanType) -> ScanResult {
+        
+        // check whether a scan is active
+        println!("[i] Scanning result: {}", self.file_scanner.is_scanning());
+        if self.file_scanner.is_scanning() {
+            return ScanResult::ScanInProgress; 
         }
 
-        let result = self.file_scanner.scan_file_against_hashes(target);
-        self.end_scan();
+        self.file_scanner.scan_started(); // update state
+
+        // send the job for a scan
+        let result = match scan_type {
+            ScanType::File => ScanResult::FileResult(self.file_scanner.scan_file_against_hashes(target)),
+            ScanType::Folder => ScanResult::DirectoryResult(self.file_scanner.scan_from_folder_all_children(target)),
+        };
+
+        self.file_scanner.end_scan(); // update state
 
         result
-    }
 
-
-    pub fn scanner_scan_directory(&self, target: PathBuf) -> Result<Vec<MatchedIOC>, io::Error>{
-
-        if self.try_start_scan().is_err() {
-            return Err(io::Error::new(io::ErrorKind::Uncategorized, "A scan is already taking place."));
-        }
-
-        let result = self.file_scanner.scan_from_folder_all_children(target);
-        self.end_scan();
-
-        result
     }
 }
 

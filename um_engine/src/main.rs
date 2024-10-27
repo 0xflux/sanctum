@@ -1,3 +1,5 @@
+#![feature(io_error_uncategorized)]
+
 use std::{io, path::PathBuf, time::Instant};
 
 use driver_manager::SanctumDriverManager;

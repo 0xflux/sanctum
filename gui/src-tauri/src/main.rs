@@ -18,7 +18,7 @@ async fn main() {
 	
 	tauri::Builder::default()
 	.manage(um_engine)
-		.invoke_handler(tauri::generate_handler![start_individual_file_scan, start_folder_scan])
+		.invoke_handler(tauri::generate_handler![start_folder_scan, start_individual_file_scan])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
 }
