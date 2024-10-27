@@ -1,8 +1,8 @@
 #![feature(io_error_uncategorized)]
-use std::{io, path::PathBuf, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::{Duration, Instant}};
+use std::{io, path::PathBuf, sync::atomic::{AtomicBool, Ordering}, time::Instant};
 
 use driver_manager::SanctumDriverManager;
-use filescanner::{FileScanner, ScanningLiveInfo};
+use filescanner::FileScanner;
 pub use filescanner::State;
 pub use filescanner::MatchedIOC;
 
@@ -39,7 +39,7 @@ impl UmEngine {
         //
 
         // driver manager
-        let mut driver_manager: SanctumDriverManager = SanctumDriverManager::new();
+        let driver_manager: SanctumDriverManager = SanctumDriverManager::new();
 
         // scanner module
         let scanner = FileScanner::new();
@@ -109,6 +109,7 @@ impl UmEngine {
 ///
 /// TODO this may need to be moved to its own thread in the future to allow the engine to
 /// keep doing its thing whilst waiting on user input.
+#[allow(dead_code)]
 fn user_input_loop(
     driver_manager: &mut SanctumDriverManager,
     scanner: &FileScanner
