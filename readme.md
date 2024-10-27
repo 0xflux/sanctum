@@ -14,7 +14,11 @@ Currently in its early stages, I have a plan for the project which I will update
 
 This is a high level overview for how I would like to structure this project.
 
-![IOCTL example](imgs/planning/sanctum_overview.jpg)
+![High level overview of Sanctum Rust Windows Driver](imgs/planning/sanctum_overview.jpg)
+
+A high level view of my API design for the internal application (not counting any web API's) looks as below. I have opted to try keep the interface UmEngine a singleton. The design is somewhat problematic in that if the UmEngine were to be mutable, a mutex would be required to mutate any internal state. The difficulty with this is that this could significantly block the main thread depending on what the mutation / action is. So I am opting at the moment for a non-publicly mutable singleton which maintains it's own state internally, allowing actions to be carried across either OS threads or green threads. The API overview (this may not be up-to-date in terms of exported functions etc):
+
+![Sanctum Rust Windows Driver API Overview](imgs/evidence/sanctum_api.jpg)
 
 ### Why Rust for writing a Windows Driver
 
