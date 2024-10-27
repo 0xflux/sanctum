@@ -179,7 +179,7 @@ impl FileScanner {
                 // todo some profiling here to see where the slowdowns are and if it can be improved
                 // i suspect large file size ingests is causing the difference in speed as it reads it
                 // into a buffer.
-                println!("[i] Path: {}", path.display());
+                println!("[i] Scanning file: {} for malware.", path.display());
 
                 // add the folder to the next iteration 
                 if path.is_dir() {

@@ -32,9 +32,15 @@ The EDR code is logically separated in one solution into the kernel mode driver 
 
 The usermode aspect of this application includes a GUI for you to use as a native windows program. 
 
-## File scanning for malware detection (IOC hash):
+## Antivirus scanning for malware detection (IOC hash):
+
+Scanning a file:
 
 ![File scanning](imgs/evidence/av_scan_file.gif)
+
+Scanning a folder:
+
+![File scanning](imgs/evidence/scan_folder.gif)
 
 # Driver features
 
