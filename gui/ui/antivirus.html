@@ -131,7 +131,7 @@
 					<b>Individual file scan</b>
 					<p>Enter the file path for the file you wish to scan...</p>
 					<form action="#" id="file_scan_form">
-						<input type="text" placeholder="Enter file path" id="file_path_input" />
+						<input type="text" autocomplete="off" placeholder="Enter file path" id="file_path_input" />
 						<button type="submit" class="single_box_button">Scan!</button>
 						<p id="single_file_scan_result"></p>
 						<p id="single_file_scan_error" class="error_msg"></p>
@@ -143,7 +143,7 @@
 					<b>Folder / full disk scan</b>
 					<p>Enter the directory root you wish to scan, if you wish to scan the full filesystem you should indicate the drive letter, such as C:\. At the moment this doesn't support scanning all connected drives from the push of a button.</p>
 					<form action="#" id="folder_scan_form">
-						<input type="text" placeholder="Enter folder path" id="folder_path_input" />
+						<input type="text" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
 						<button type="submit" class="single_box_button">Scan!</button>
 						<p id="folder_scan_result"></p>
 						<p id="folder_scan_err"></p>
