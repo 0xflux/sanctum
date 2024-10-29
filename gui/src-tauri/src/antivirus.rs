@@ -2,7 +2,7 @@
 //! This module will handle state, requests, async, and events.
 
 use std::sync::Arc;
-use tauri::{Manager, State};
+use tauri::{Emitter, State};
 use std::path::PathBuf;
 use um_engine::{UmEngine, ScanType, ScanResult};
 
@@ -12,6 +12,8 @@ pub async fn start_individual_file_scan(
     engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
+
+    println!("Hello???");
 
 	let engine = Arc::clone(&engine);
     let path = PathBuf::from(file_path);
@@ -25,16 +27,18 @@ pub async fn start_individual_file_scan(
 		match result {
             ScanResult::FileResult(result) => {
                 match result {
-                    Err(e) => app_handle.emit_all("scan_error", format!("Error occurred whilst trying to scan file: {}", e)).unwrap(),
-                    Ok(Some(v)) => app_handle.emit_all("scan_complete", format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)).unwrap(),
-                    Ok(None) => app_handle.emit_all("scan_complete",format!("File clean!")).unwrap(),
+                    Err(e) => app_handle.emit("scan_error", format!("Error occurred whilst trying to scan file: {}", e)).unwrap(),
+                    Ok(Some(v)) => app_handle.emit("scan_complete", format!("Found malware in file: {}, hash: {}", v.1.display(), v.0)).unwrap(),
+                    Ok(None) => app_handle.emit("scan_complete",format!("File clean!")).unwrap(),
                 }
             },
-            ScanResult::ScanInProgress => app_handle.emit_all("scan_error", format!("A scan is already in progress.")).unwrap(),
+            ScanResult::ScanInProgress => app_handle.emit("scan_error", format!("A scan is already in progress.")).unwrap(),
             _ => {
-                app_handle.emit_all("scan_error", format!("Internal error occurred")).unwrap();
+                app_handle.emit("scan_error", format!("Internal error occurred")).unwrap();
             }
 		}
+
+        println!("Result come out!");
 	});
     
 	Ok(format!("Scan started..."))
@@ -62,17 +66,17 @@ pub async fn start_folder_scan(
                 match result {
                     Ok(v) => {
                         if v.is_empty() {
-                            app_handle.emit_all("folder_scan_no_results", "No malicious files found.").unwrap();
+                            app_handle.emit("folder_scan_no_results", "No malicious files found.").unwrap();
                         } else {
-                            app_handle.emit_all("folder_scan_malware_found", &v).unwrap();
+                            app_handle.emit("folder_scan_malware_found", &v).unwrap();
                         }
                     },
-                    Err(e) => app_handle.emit_all("folder_scan_error", format!("Error occurred whilst trying to scan directory: {}", e)).unwrap(),
+                    Err(e) => app_handle.emit("folder_scan_error", format!("Error occurred whilst trying to scan directory: {}", e)).unwrap(),
                 }
             },
-            ScanResult::ScanInProgress => app_handle.emit_all("folder_scan_error", format!("A scan is already in progress.")).unwrap(),
+            ScanResult::ScanInProgress => app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap(),
             _ => {
-                app_handle.emit_all("folder_scan_error", format!("Internal error occurred")).unwrap();
+                app_handle.emit("folder_scan_error", format!("Internal error occurred")).unwrap();
             }
 		}
 	});
