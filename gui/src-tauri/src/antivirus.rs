@@ -37,6 +37,8 @@ pub async fn start_individual_file_scan(
                 app_handle.emit("scan_error", format!("Internal error occurred")).unwrap();
             }
 		}
+
+        println!("Result come out!");
 	});
     
 	Ok(format!("Scan started..."))

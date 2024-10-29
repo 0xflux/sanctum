@@ -8,11 +8,9 @@
 	<script src="nav.js"></script>
 
 	<script>
+	const { invoke } = window.__TAURI__.core;
+	const { listen } = window.__TAURI__.event;
 	document.addEventListener("DOMContentLoaded", function() {
-
-		const { invoke } = window.__TAURI__.tauri
-    	const { listen } = window.__TAURI__.event
-
 
 		//
 		// Listeners
@@ -23,48 +21,58 @@
 			const scanResult = scanEvent.payload;
 			console.log("Scan result received:", scanResult);
 
-			document.getElementById("single_file_scan_result").innerHTML = scanResult;
-			document.getElementById("single_file_scan_error").innerHTML = "";
+			setTimeout(() => {
+				document.getElementById("single_file_scan_result").textContent = scanResult;
+				document.getElementById("single_file_scan_error").textContent = "";
+			}, 50);
 		});
 		// error from single file scan
 		listen("scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
-			document.getElementById("single_file_scan_result").innerHTML = "" // blank the "started scan" msg
-			document.getElementById("single_file_scan_error").innerHTML = scanResult;
+			setTimeout(() => {
+				document.getElementById("single_file_scan_result").textContent = "" // blank the "started scan" msg
+				document.getElementById("single_file_scan_error").textContent = scanResult;
+			}, 50);
 		});
 
 		// scan complete for folder - no results
 		listen("folder_scan_no_results", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
-			document.getElementById("folder_scan_result").innerHTML = scanResult;
-			document.getElementById("folder_scan_err").innerHTML = "";
+			setTimeout(() => {
+				document.getElementById("folder_scan_result").textContent = scanResult;
+				document.getElementById("folder_scan_err").textContent = "";
+			}, 50);
 		});
 		// scan complete for folder - malware
 		listen("folder_scan_malware_found", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
 			console.log("Scan result received:", scanResult);
-
 			const resultContainer = document.getElementById("folder_scan_result");
-    		resultContainer.innerHTML = ""; 
 
-			// iterate through the results and print as a new paragraph
-			scanResult.forEach((result) => {
-				const resultItem = document.createElement("p");
-				resultItem.textContent = `Malware found. File: ${result.file}, Hash: ${result.hash}`;
-				resultContainer.appendChild(resultItem);
-			});
+			setTimeout(() => {
+				resultContainer.textContent = ""; 
 
-			document.getElementById("folder_scan_err").innerHTML = "";
+				// iterate through the results and print as a new paragraph
+				scanResult.forEach((result) => {
+					const resultItem = document.createElement("p");
+					resultItem.textContent = `Malware found. File: ${result.file}, Hash: ${result.hash}`;
+					resultContainer.appendChild(resultItem);
+				});
+
+				document.getElementById("folder_scan_err").textContent = "";
+			}, 50);
 		});
 		// scan complete for folder - error
 		listen("folder_scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 
-			document.getElementById("folder_scan_result").innerHTML = "" // blank the "started scan" msg
-			document.getElementById("folder_scan_err").innerHTML = scanResult;
+			setTimeout(() => {
+				document.getElementById("folder_scan_result").textContent = "" // blank the "started scan" msg
+				document.getElementById("folder_scan_err").textContent = scanResult;
+			}, 50);
 		});
 
 
