@@ -8,9 +8,12 @@
 	<script src="nav.js"></script>
 
 	<script>
-	const { invoke } = window.__TAURI__.core;
-	const { listen } = window.__TAURI__.event;
 	document.addEventListener("DOMContentLoaded", function() {
+
+		const { invoke } = window.__TAURI__.core;
+		const { listen } = window.__TAURI__.event;
+
+		const TIMEOUT_WAIT = 20;
 
 		//
 		// Listeners
@@ -24,7 +27,7 @@
 			setTimeout(() => {
 				document.getElementById("single_file_scan_result").textContent = scanResult;
 				document.getElementById("single_file_scan_error").textContent = "";
-			}, 50);
+			}, TIMEOUT_WAIT);
 		});
 		// error from single file scan
 		listen("scan_error", function (scanEvent) {
@@ -33,7 +36,7 @@
 			setTimeout(() => {
 				document.getElementById("single_file_scan_result").textContent = "" // blank the "started scan" msg
 				document.getElementById("single_file_scan_error").textContent = scanResult;
-			}, 50);
+			}, TIMEOUT_WAIT);
 		});
 
 		// scan complete for folder - no results
@@ -43,7 +46,7 @@
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = scanResult;
 				document.getElementById("folder_scan_err").textContent = "";
-			}, 50);
+			}, TIMEOUT_WAIT);
 		});
 		// scan complete for folder - malware
 		listen("folder_scan_malware_found", function (scanEvent) {
@@ -63,7 +66,7 @@
 				});
 
 				document.getElementById("folder_scan_err").textContent = "";
-			}, 50);
+			}, TIMEOUT_WAIT);
 		});
 		// scan complete for folder - error
 		listen("folder_scan_error", function (scanEvent) {
@@ -72,7 +75,7 @@
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = "" // blank the "started scan" msg
 				document.getElementById("folder_scan_err").textContent = scanResult;
-			}, 50);
+			}, TIMEOUT_WAIT);
 		});
 
 
