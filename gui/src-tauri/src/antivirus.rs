@@ -6,16 +6,19 @@ use tauri::{Emitter, State};
 use std::path::PathBuf;
 use um_engine::{UmEngine, ScanType, ScanResult};
 
-// #[tauri::command]
-// pub fn check_page_state(
-//     engine: State<'_, Arc<UmEngine>>,
-// 	app_handle: tauri::AppHandle,
-// ) -> Result<(), ()> {
+#[tauri::command]
+pub fn check_page_state(
+    engine: State<'_, Arc<UmEngine>>,
+	app_handle: tauri::AppHandle,
+) -> Result<(), ()> {
 
-//     let engine = Arc::clone(&engine);
+    let engine = Arc::clone(&engine);
 
-//     Ok(())
-// }
+    // todo from here, regular poll of status of the scan - maybe every second
+    // this should also fetch data on files scanned, time taken, etc.
+
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn start_individual_file_scan(
