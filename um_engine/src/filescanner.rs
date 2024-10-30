@@ -3,22 +3,25 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
+use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::{atomic::{AtomicBool, Ordering}, Mutex}, time::{Duration, Instant}};
 
 use sha2::{Sha256, Digest};
-use shared::constants::IOC_LIST_LOCATION;
+use shared::{constants::IOC_LIST_LOCATION, gui_traits::GuiPage};
 use serde::{Deserialize, Serialize};
 
+#[derive(PartialEq, Debug, Clone)]
 pub enum ScanType {
     File,
     Folder,
 }
+
 
 pub enum ScanResult {
     FileResult(Result<Option<(String, PathBuf)>, io::Error>),
     DirectoryResult(Result<Vec<MatchedIOC>, io::Error>),
     ScanInProgress,
 }
+
 
 /// Structure for containing results pertaining to an IOC match
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,7 +31,10 @@ pub struct MatchedIOC {
     pub file: PathBuf,
 }
 
+
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
+/// This struct is public for visibility from lib.rs the core of um_engine, but it not intended to be accessed from the 
+/// Tauri application - for handling state (which tauri will need to interact with), see FileScannerState
 pub struct FileScanner {
     // iocs:
     // Using a BTreeSet for the IOCs as it has the best time complexity for searching - Rust's implementation in the stdlib
@@ -37,12 +43,9 @@ pub struct FileScanner {
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
     // state - The state of the scanner so we can lock it whilst scanning
-    pub state: State,
-    // is_cancelled - An internal flag to indicate whether the job is cancelled or not from the GUI
-    is_cancelled: AtomicBool,
-    // is_scanning: An internal flag to indicate whether a scan is taking place - only 1 scan at a time atm.
-    is_scanning: AtomicBool,
+    pub state: Mutex<State>,
 }
+
 
 /// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
 /// further information about the live-time information such as how many files have been scanned and time taken so far.
@@ -53,12 +56,25 @@ pub enum State {
     Cancelled,
 }
 
+
 /// Live time information about the current scan
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ScanningLiveInfo {
+    pub scan_type: ScanType,
     pub num_files_scanned: u128,
     pub time_taken: Duration,
 }
+
+impl ScanningLiveInfo {
+    fn from(scan_type: ScanType) -> Self {
+        ScanningLiveInfo {
+            scan_type,
+            num_files_scanned: 0,
+            time_taken: Duration::new(0, 0),
+        }
+    }
+}
+
 
 impl FileScanner {
     /// Construct a new instance of the FileScanner with no parameters.
@@ -78,41 +94,47 @@ impl FileScanner {
         Ok(
             FileScanner {
                 iocs: bts,
-                state: State::Inactive,
-                is_cancelled: AtomicBool::new(false),
-                is_scanning: AtomicBool::new(false),
+                state: Mutex::new(State::Inactive),
             }
         )
     }
 
 
     /// Cancels the current scan
-    pub fn cancel_scan(&mut self) {
-        self.is_cancelled.store(true, Ordering::SeqCst);
-        self.is_scanning.store(false, Ordering::SeqCst); // update state
+    pub fn cancel_scan(&self) {
+        let mut lock = self.state.lock().unwrap();
+        *lock = State::Cancelled;
     }
 
 
-    pub fn scan_started(&self) {
-        self.is_scanning.store(true, Ordering::SeqCst);
+    pub fn scan_started(&self, st: ScanType) {
+        let mut lock = self.state.lock().unwrap();
+        *lock = State::Scanning(ScanningLiveInfo::from(st));
     }
 
 
     /// Checks whether a scan is in progress
     pub fn is_scanning(&self) -> bool {
-        self.is_scanning.load(Ordering::SeqCst)
+        let lock = self.state.lock().unwrap();
+        match *lock {
+            State::Scanning(_) => true,
+            State::Inactive => false,
+            State::Cancelled => false,
+        }
     }
 
 
     /// Checks whether the scan is cancelled, returning a bool
-    fn is_cancelled(&self) -> bool {
-        self.is_cancelled.load(Ordering::SeqCst)
-    }
+    // fn is_cancelled(&mut self) -> bool {
+    //     self.is_cancelled.load(Ordering::SeqCst)
+    // }
 
 
     /// Updates the internal is_scanning state to false
     pub fn end_scan(&self) {
-        self.is_scanning.store(false, Ordering::SeqCst);
+        let mut lock = self.state.lock().unwrap();
+        *lock = State::Inactive;
+        // self.is_scanning.store(false, Ordering::SeqCst);
     }
 
 
@@ -175,9 +197,12 @@ impl FileScanner {
                 //
                 // Putting this in the loop makes sense (in the event of a large file)
                 //
-                if self.is_cancelled() {
-                    // todo update the error type of this fn to something more flexible
-                    return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+                {
+                    let lock = self.state.lock().unwrap();
+                    if *lock == State::Cancelled {
+                        // todo update the error type of this fn to something more flexible
+                        return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+                    }
                 }
 
                 let count = reader.read(&mut buf)?;
@@ -216,10 +241,13 @@ impl FileScanner {
 
         while !discovered_dirs.is_empty() {
 
-            // check whether teh scan is cancelled
-            if self.is_cancelled() {
-                // todo update the error type of this fn to something more flexible
-                return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+            // check whether the scan is cancelled
+            {
+                let lock = self.state.lock().unwrap();
+                if *lock == State::Cancelled {
+                     // todo update the error type of this fn to something more flexible
+                    return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+                }
             }
 
             // pop a directory
@@ -285,3 +313,11 @@ impl FileScanner {
     }
 
 }
+
+// impl GuiPage for FileScanner {
+//     fn get_state<T>(&self) -> T {
+        
+//         let scanning = self.is_scanning();
+        
+//     }
+// }

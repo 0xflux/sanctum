@@ -1,9 +1,9 @@
 #![feature(io_error_uncategorized)]
-use std::{io, path::PathBuf, sync::atomic::{AtomicBool, Ordering}, time::Instant};
+use std::{io, path::PathBuf, time::Instant};
 
 use driver_manager::SanctumDriverManager;
 use filescanner::FileScanner;
-pub use filescanner::{State, MatchedIOC, ScanResult, ScanType};
+pub use filescanner::{MatchedIOC, ScanResult, ScanType};
 
 mod driver_manager;
 mod strings;
@@ -70,7 +70,7 @@ impl UmEngine {
             return ScanResult::ScanInProgress; 
         }
 
-        self.file_scanner.scan_started(); // update state
+        self.file_scanner.scan_started(scan_type.clone()); // update state
 
         // send the job for a scan
         let result = match scan_type {

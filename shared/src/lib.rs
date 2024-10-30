@@ -4,3 +4,4 @@
 
 pub mod constants;
 pub mod ioctl;
+pub mod gui_traits;

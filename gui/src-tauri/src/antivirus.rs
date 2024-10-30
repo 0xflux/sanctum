@@ -6,14 +6,23 @@ use tauri::{Emitter, State};
 use std::path::PathBuf;
 use um_engine::{UmEngine, ScanType, ScanResult};
 
+// #[tauri::command]
+// pub fn check_page_state(
+//     engine: State<'_, Arc<UmEngine>>,
+// 	app_handle: tauri::AppHandle,
+// ) -> Result<(), ()> {
+
+//     let engine = Arc::clone(&engine);
+
+//     Ok(())
+// }
+
 #[tauri::command]
 pub async fn start_individual_file_scan(
     file_path: String,
     engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
-
-    println!("Hello???");
 
 	let engine = Arc::clone(&engine);
     let path = PathBuf::from(file_path);
@@ -37,8 +46,6 @@ pub async fn start_individual_file_scan(
                 app_handle.emit("scan_error", format!("Internal error occurred")).unwrap();
             }
 		}
-
-        println!("Result come out!");
 	});
     
 	Ok(format!("Scan started..."))
