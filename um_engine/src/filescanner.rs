@@ -116,9 +116,7 @@ impl FileScanner {
         if *lock == State::Scanning {
             *lock = State::Cancelled; // update state
             let sli = self.scanning_info.lock().unwrap();
-
-            println!("[i] Scanning time: {:?}, total files scanned: {}", sli.time_taken, sli.num_files_scanned);
-
+            
             return Some(sli.clone());
         } 
 
