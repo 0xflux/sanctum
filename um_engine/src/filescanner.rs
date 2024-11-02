@@ -268,15 +268,6 @@ impl FileScanner {
 
         while !discovered_dirs.is_empty() {
 
-            // check whether the scan is cancelled
-            {
-                let lock = self.state.lock().unwrap();
-                if *lock == State::Cancelled {
-                     // todo update the error type of this fn to something more flexible
-                    return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
-                }
-            }
-
             // pop a directory
             let target = discovered_dirs.pop();
             if target.is_none() { continue; }
@@ -293,6 +284,17 @@ impl FileScanner {
                         continue;
                     },
                 };
+
+                // check whether the scan is cancelled
+                {
+                    let lock = self.state.lock().unwrap();
+                    if *lock == State::Cancelled {
+                        // todo update the error type of this fn to something more flexible
+                        println!("[i] Dirs left: {}", discovered_dirs.len());
+                        return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
+                    }
+                }
+
                 let path = entry.path();
 
                 // todo some profiling here to see where the slowdowns are and if it can be improved

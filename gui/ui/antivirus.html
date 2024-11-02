@@ -95,15 +95,19 @@
 			// if we are scanning, the button click will be for cancelling
 			if (scan_in_progress) {
 				document.getElementById("folder_scan_err").textContent = "User cancelled scan.";
-				scan_in_progress = false;
-				set_scan_button_state(scan_in_progress);
-
+				// disable the button to wait for the app to respond
+				document.getElementById("scan_submit_btn").disabled = true;
+				
 				invoke('stop_scan')
 					.then((response) => {
 						document.getElementById("folder_scan_result").innerHTML = response;
+						scan_in_progress = false;
+						set_scan_button_state(scan_in_progress);
 					})
-					.catch((error) => console.error("Invoke error:", error));
-
+					.catch((error) => {
+						console.error("Invoke error:", error);
+						document.getElementById("scan_submit_btn").disabled = false;
+					});
 			} else {
 				// otherwise it will be for starting the scan
 				scan_in_progress = true;
@@ -159,9 +163,9 @@
 		/// Toggles the scanning state for the bool, and determines which page elements to show
 		function set_scan_button_state(is_scanning) {
 			if (is_scanning) {
-				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\">Cancel</button>";
+				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\"  id=\"scan_submit_btn\">Cancel</button>";
 			} else {
-				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\">Scan</button>";
+				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\" id=\"scan_submit_btn\">Scan</button>";
 			}
 		}
 	});
@@ -189,7 +193,7 @@
 
 						<!-- Js will put the button here -->
 						<div id="scan_button">
-							<button type="submit" class="single_box_button">Scan</button>
+							<button type="submit" class="single_box_button" id="scan_submit_btn">Scan</button>
 						</div>
 
 						<p id="folder_scan_result"></p>
