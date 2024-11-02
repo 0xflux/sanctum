@@ -188,7 +188,7 @@
 					console.log("Stats: ", stats)
 					const parsed_stats = JSON.parse(stats);
 					console.log("Parsed stats: ", stats)
-					document.getElementById("folder_scan_result").textContent = `Scan in progress... Time taken: ${parsed_stats.time_taken.secs}s.`;
+					document.getElementById("folder_scan_result").textContent = `Scan in progress... Time taken: ${parsed_stats.time_taken.secs}s. Number of files scanned: ${parsed_stats.num_files_scanned}`;
 				}).catch((error) => console.error("Invoke error:", error));
 		}
 	});

@@ -117,7 +117,7 @@ impl FileScanner {
             *lock = State::Cancelled; // update state
             let sli = self.scanning_info.lock().unwrap();
 
-            println!("[i] Scanning time: {:?}", self.scanning_info.lock().unwrap().time_taken);
+            println!("[i] Scanning time: {:?}, total files scanned: {}", sli.time_taken, sli.num_files_scanned);
 
             return Some(sli.clone());
         } 
@@ -168,7 +168,7 @@ impl FileScanner {
     /// (String, PathBuf). If the function returns None, then there was no hash match made for malware. 
     /// 
     /// If it returns the Some variant, the hash of the IOC will be returned for post-processing and decision making, as well as the file name / path as PathBuf.
-    fn scan_file_against_hashes(&self, target: &PathBuf) -> Result<Option<(String, PathBuf)>, std::io::Error>{
+    fn scan_file_against_hashes(&self, target: &PathBuf, files_scanned: &Arc<Mutex<u32>>) -> Result<Option<(String, PathBuf)>, std::io::Error>{
         //
         // In order to not read the whole file into memory (would be bad if the file size is > the amount of RAM available)
         // I've decided to loop over an array of 1024 bytes at at time until the end of the file, and use the hashing crate sha2
@@ -221,7 +221,6 @@ impl FileScanner {
                     let lock = self.state.lock().unwrap();
                     if *lock == State::Cancelled {
                         // todo update the error type of this fn to something more flexible
-                        println!("[i] Returning...");
                         return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
                     }
                 }
@@ -235,6 +234,12 @@ impl FileScanner {
         };
         let hash = format!("{:X}", hash); // format as string, uppercase
 
+        // increment the number of files scanned
+        {
+            let mut files_scanned = files_scanned.lock().unwrap();
+            *files_scanned += 1;
+        }
+        
         // check the BTreeSet
         if self.iocs.contains(hash.as_str()) {
             // if we have a match on the malware..
@@ -255,6 +260,10 @@ impl FileScanner {
         let clock_clone = Arc::clone(&stop_clock);
         let self_scanning_info_clone = Arc::clone(&self.scanning_info);
 
+        let files_scanned: Arc<Mutex<u32>> = Arc::new(Mutex::new(0));
+        let files_scanned_clone = Arc::clone(&files_scanned);
+        let files_scanned_for_scanner = Arc::clone(&files_scanned);
+
         // timer in its own green thread
         thread::spawn(move || {
             let timer = Instant::now();
@@ -267,17 +276,24 @@ impl FileScanner {
 
                 // not cancelled, so get the elapsed time
                 let elapsed = timer.elapsed();
+                let delta_files_scanned = {
+                    let mut files_scanned_lock = files_scanned_clone.lock().unwrap();
+                    let r = *files_scanned_lock; // get the result value
+                    *files_scanned_lock = 0; // reset to 0
+                    r
+                };
                 {
                     let mut lock = self_scanning_info_clone.lock().unwrap();
                     lock.time_taken = elapsed;
-
+                    lock.num_files_scanned = lock.num_files_scanned + delta_files_scanned as u128;
                 }
-                std::thread::sleep(Duration::from_millis(10));
+
+                std::thread::sleep(Duration::from_millis(100));
             }
         });
         
         if !target.is_dir() {
-            let res = self.scan_file_against_hashes(&target);
+            let res = self.scan_file_against_hashes(&target, &files_scanned_for_scanner);
             match res {
                 Ok(res) => {
                     if let Some(v) = res {
@@ -334,7 +350,6 @@ impl FileScanner {
                     let lock = self.state.lock().unwrap();
                     if *lock == State::Cancelled {
                         // todo update the error type of this fn to something more flexible
-                        println!("[i] Dirs left: {}", discovered_dirs.len());
                         *stop_clock.lock().unwrap() = true;
                         return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
                     }
@@ -345,7 +360,6 @@ impl FileScanner {
                 // todo some profiling here to see where the slowdowns are and if it can be improved
                 // i suspect large file size ingests is causing the difference in speed as it reads it
                 // into a buffer.
-                println!("[i] Scanning file: {} for malware.", path.display());
 
                 // add the folder to the next iteration 
                 if path.is_dir() {
@@ -357,7 +371,7 @@ impl FileScanner {
                 // Check the file against the hashes, we are only interested in positive matches at this stage
                 //
                 let now = Instant::now();
-                match self.scan_file_against_hashes(&path) {
+                match self.scan_file_against_hashes(&path, &files_scanned_for_scanner) {
                     Ok(v) => {
                         if v.is_some() {
                             let v = v.unwrap();

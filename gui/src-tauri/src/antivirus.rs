@@ -40,8 +40,6 @@ pub async fn stop_scan(
 
     let engine = Arc::clone(&engine);
 
-    println!("[i] Cancel clicked...");
-
     engine.scanner_cancel_scan();
 
     Ok(())
