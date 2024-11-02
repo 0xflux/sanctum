@@ -27,7 +27,7 @@
 					console.log(`Starting state: ${state}`);
 					if (state === 'Scanning') {
 						console.log("Starting state is scanning");
-						write_live_scan_stats();
+						write_live_scan_stats("Scanning...");
 						scan_in_progress = true;
 					} else {
 						console.log("Starting state is NOT scanning");
@@ -51,6 +51,7 @@
 			set_scan_button_state(scan_in_progress);
 
 			setTimeout(() => {
+				write_live_scan_stats("Scan finished.")
 				document.getElementById("folder_scan_result").textContent = scanResult;
 				document.getElementById("folder_scan_err").textContent = "";
 			}, TIMEOUT_WAIT);
@@ -66,6 +67,7 @@
 
 			setTimeout(() => {
 				resultContainer.textContent = ""; 
+				write_live_scan_stats("Scan finished.")
 
 				// iterate through the results and print as a new paragraph
 				scanResult.scan_results.forEach((result) => {
@@ -84,6 +86,7 @@
 			set_scan_button_state(scan_in_progress);
 
 			setTimeout(() => {
+				write_live_scan_stats("Scan finished.")
 				document.getElementById("folder_scan_result").textContent = "" // blank the "started scan" msg
 				document.getElementById("folder_scan_err").textContent = scanResult;
 			}, TIMEOUT_WAIT);
@@ -107,6 +110,7 @@
 				
 				invoke('stop_scan')
 					.then((response) => {
+						write_live_scan_stats("Scan cancelled.")
 						document.getElementById("folder_scan_result").innerHTML = response;
 						scan_in_progress = false;
 						set_scan_button_state(scan_in_progress);
@@ -152,12 +156,12 @@
 							if (state === 'Scanning') {
 								
 								// if we are scanning, make another call to get the stats
-								write_live_scan_stats();
+								write_live_scan_stats("Scanning...");
 
 							} else {
 								console.log("Starting state is NOT scanning");
 								scan_in_progress = false;
-								RETURN;
+								return;
 							}
 						} else {
 							console.error(`Unexpected state received: ${state}`);
@@ -182,13 +186,16 @@
 		}
 
 
-		function write_live_scan_stats() {
+		function write_live_scan_stats(scan_text) {
 			invoke('get_scan_stats')
 				.then((stats) => {
 					console.log("Stats: ", stats)
 					const parsed_stats = JSON.parse(stats);
 					console.log("Parsed stats: ", stats)
-					document.getElementById("folder_scan_result").textContent = `Scan in progress... Time taken: ${parsed_stats.time_taken.secs}s. Number of files scanned: ${parsed_stats.num_files_scanned}`;
+
+					let txt = `${scan_text} Time taken: ${parsed_stats.time_taken.secs}s. Number of files scanned: ${parsed_stats.num_files_scanned}`;
+
+					document.getElementById("folder_scan_stats").textContent = txt;
 				}).catch((error) => console.error("Invoke error:", error));
 		}
 	});
@@ -219,6 +226,7 @@
 							<button type="submit" class="single_box_button" id="scan_submit_btn">Scan</button>
 						</div>
 
+						<p id="folder_scan_stats"></p>
 						<p id="folder_scan_result"></p>
 						<p id="folder_scan_err" class="error_msg"></p>
 					</form>

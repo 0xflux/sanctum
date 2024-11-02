@@ -3,12 +3,12 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::{atomic::AtomicBool, Arc, Mutex}, thread, time::{Duration, Instant}};
+use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 
-use sha2::{Sha256, Digest};
+use md5::{Digest, Md5};
+// use sha2::{Sha256, Digest};
 use shared::constants::IOC_LIST_LOCATION;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::watch, time::sleep};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum ScanType {
@@ -179,7 +179,7 @@ impl FileScanner {
         let mut reader = BufReader::new(&file);
 
         let hash = {
-            let mut hasher = Sha256::new();
+            let mut hasher = Md5::new();
 
             //
             // We are going to put the file data as bytes onto the heap to prevent a stack buffer overrun, and in doing so
@@ -232,7 +232,7 @@ impl FileScanner {
             
             hasher.finalize()
         };
-        let hash = format!("{:X}", hash); // format as string, uppercase
+        let hash: String = hash.iter().map(|byte| format!("{:02X}", byte)).collect();
 
         // increment the number of files scanned
         {
@@ -288,7 +288,7 @@ impl FileScanner {
                     lock.num_files_scanned = lock.num_files_scanned + delta_files_scanned as u128;
                 }
 
-                std::thread::sleep(Duration::from_millis(100));
+                std::thread::sleep(Duration::from_millis(10));
             }
         });
         
@@ -309,6 +309,8 @@ impl FileScanner {
                         *stop_clock.lock().unwrap() = true;
                         return Ok(State::Finished);
                     }
+
+                    return Ok(State::Finished);
                 },
                 Err(e) => {
                     *stop_clock.lock().unwrap() = true;
