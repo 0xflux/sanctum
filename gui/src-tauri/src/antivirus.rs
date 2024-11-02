@@ -10,14 +10,20 @@ use um_engine::{UmEngine, ScanType, ScanResult};
 pub fn check_page_state(
     engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
-) -> Result<(), ()> {
+) -> Result<String, ()> {
 
     let engine = Arc::clone(&engine);
 
     // todo from here, regular poll of status of the scan - maybe every second
     // this should also fetch data on files scanned, time taken, etc.
+    let state = engine.scanner_get_state();
+    println!("[i] State: {:?}", state);
 
-    Ok(())
+    // app_handle.emit("state_update", state).unwrap();
+
+    let state = serde_json::to_string(&state).unwrap_or(String::new());
+
+    Ok(state)
 }
 
 #[tauri::command]

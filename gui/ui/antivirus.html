@@ -16,12 +16,31 @@
 		const TIMEOUT_WAIT = 20;
 
 		//
+		// Page initialisation
+		//
+		var scan_in_progress = false;
+		var state = invoke('check_page_state')
+			.then((state) => {
+				let json_object = JSON.parse(state);
+				if (json_object.hasOwnProperty('Scanning')) {
+					console.log('The state is Scanning.');
+					scan_in_progress = true;
+				} else {
+					console.log('The state is NOT Scanning.');
+				}
+
+				console.log("Page state:", state);
+			})
+			.catch((error) => console.error("Invoke error:", error));
+
+		//
 		// Listeners
 		//
 
 		// scan complete from backend
 		listen("scan_complete", function (scanEvent) {
 			const scanResult = scanEvent.payload;
+			scan_in_progress = false;
 			console.log("Scan result received:", scanResult);
 
 			setTimeout(() => {
@@ -32,6 +51,7 @@
 		// error from single file scan
 		listen("scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
+			scan_in_progress = false;
 
 			setTimeout(() => {
 				document.getElementById("single_file_scan_result").textContent = "" // blank the "started scan" msg
@@ -42,6 +62,7 @@
 		// scan complete for folder - no results
 		listen("folder_scan_no_results", function (scanEvent) {
 			const scanResult = scanEvent.payload;
+			scan_in_progress = false;
 
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = scanResult;
@@ -51,6 +72,7 @@
 		// scan complete for folder - malware
 		listen("folder_scan_malware_found", function (scanEvent) {
 			const scanResult = scanEvent.payload;
+			scan_in_progress = false;
 
 			console.log("Scan result received:", scanResult);
 			const resultContainer = document.getElementById("folder_scan_result");
@@ -71,6 +93,7 @@
 		// scan complete for folder - error
 		listen("folder_scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
+			scan_in_progress = false;
 
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = "" // blank the "started scan" msg
@@ -88,6 +111,9 @@
 			event.preventDefault();
 			const filePath = document.getElementById("file_path_input").value;
 
+			// todo add check here for if is scanning
+			scan_in_progress = true;
+
 			invoke('start_individual_file_scan', { filePath: filePath })
 				.then((response) => {
 					document.getElementById("single_file_scan_result").innerHTML = response;
@@ -99,6 +125,9 @@
 		var submit_folder_for_scan = function(event) {
 			event.preventDefault();
 			const file_path = document.getElementById("folder_path_input").value;
+
+			// todo add check here for if is scanning
+			scan_in_progress = true;
 
 			invoke('start_folder_scan', { filePath: file_path })
 				.then((response) => {
@@ -121,6 +150,29 @@
 		folder_submission_form.addEventListener('submit', submit_folder_for_scan, false);
 
 
+		//
+		// Async page state
+		//
+		(function check_page_state() {
+			
+			if (scan_in_progress) {
+
+				invoke('check_page_state')
+					.then((response) => {
+						let json_object = JSON.parse(response);
+						if (json_object.hasOwnProperty('Scanning')) {
+							console.log('The state is Scanning.');
+						} else {
+							console.log('The state is NOT Scanning.');
+							scan_in_progress = false;
+							return;
+						}
+					})
+					.catch((error) => console.error("Invoke error:", error));
+			}
+			
+			setTimeout( check_page_state, 500 ); // tick every half second
+		})();
 	});
 	</script>
 

@@ -3,7 +3,7 @@ use std::{io, path::PathBuf, time::Instant};
 
 use driver_manager::SanctumDriverManager;
 use filescanner::FileScanner;
-pub use filescanner::{MatchedIOC, ScanResult, ScanType};
+pub use filescanner::{MatchedIOC, ScanResult, ScanType, State};
 
 mod driver_manager;
 mod strings;
@@ -82,6 +82,10 @@ impl UmEngine {
 
         result
 
+    }
+
+    pub fn scanner_get_state(&self) -> State {
+        self.file_scanner.get_state()
     }
 }
 

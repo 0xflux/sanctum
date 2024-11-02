@@ -9,7 +9,7 @@ use sha2::{Sha256, Digest};
 use shared::{constants::IOC_LIST_LOCATION, gui_traits::GuiPage};
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum ScanType {
     File,
     Folder,
@@ -49,7 +49,7 @@ pub struct FileScanner {
 
 /// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
 /// further information about the live-time information such as how many files have been scanned and time taken so far.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum State {
     Scanning(ScanningLiveInfo),
     Inactive,
@@ -58,7 +58,7 @@ pub enum State {
 
 
 /// Live time information about the current scan
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct ScanningLiveInfo {
     pub scan_type: ScanType,
     pub num_files_scanned: u128,
@@ -310,6 +310,12 @@ impl FileScanner {
 
         Ok(matched_iocs)
 
+    }
+
+
+    pub fn get_state(&self) -> State {
+        let lock = self.state.lock().unwrap();
+        lock.clone()
     }
 
 }
