@@ -72,7 +72,7 @@ impl UmEngine {
         self.file_scanner.scan_started(); // update state
 
         // send the job for a scan
-        let result = self.file_scanner.scan_from_folder_all_children(target);
+        let result = self.file_scanner.begin_scan(target);
 
         self.file_scanner.end_scan(); // update state
 

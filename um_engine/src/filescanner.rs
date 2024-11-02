@@ -241,7 +241,7 @@ impl FileScanner {
 
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub fn scan_from_folder_all_children(&self, target: PathBuf) -> Result<State, io::Error> {
+    pub fn begin_scan(&self, target: PathBuf) -> Result<State, io::Error> {
 
         let mut scanning_info = ScanningLiveInfo::new();
 
