@@ -15,15 +15,26 @@ pub fn check_page_state(
 
     // todo from here, regular poll of status of the scan - maybe every second
     // this should also fetch data on files scanned, time taken, etc.
-    let state = engine.scanner_get_state();
-    println!("[i] State: {:?}", state);
-
-    // app_handle.emit("state_update", state).unwrap();
-
-    let state = serde_json::to_string(&state).unwrap_or(String::new());
-
-    Ok(state)
+    Ok(format!("{:?}", engine.scanner_get_state()))
 }
+
+
+/// Reports the scan statistics back to the UI 
+#[tauri::command]
+pub fn get_scan_stats(
+    engine: State<'_, Arc<UmEngine>>,
+) -> Result<String, ()> {
+
+    let engine = Arc::clone(&engine);
+
+    let data = serde_json::to_string(&engine.scanner_get_scan_data()).unwrap_or(String::new());
+
+    // todo from here, regular poll of status of the scan - maybe every second
+    // this should also fetch data on files scanned, time taken, etc.
+    Ok(data)
+}
+
+
 
 #[tauri::command]
 pub async fn stop_scan(
@@ -31,6 +42,8 @@ pub async fn stop_scan(
 ) -> Result<(), ()> {  
 
     let engine = Arc::clone(&engine);
+
+    println!("[i] Cancel clicked...");
 
     engine.scanner_cancel_scan();
 
@@ -53,18 +66,20 @@ pub async fn start_folder_scan(
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
 		match engine.scanner_start_scan(path) {
+            um_engine::State::Finished => {
 
-            um_engine::State::Finished(v) => {
-                if v.scan_results.is_empty() {
+                let scan_result = engine.scanner_get_scan_data();
+
+                if scan_result.scan_results.is_empty() {
                     app_handle.emit("folder_scan_no_results", "No malicious files found.").unwrap();
                 } else {
-                    app_handle.emit("folder_scan_malware_found", &v).unwrap();
+                    app_handle.emit("folder_scan_malware_found", &scan_result).unwrap();
                 }
             },
             um_engine::State::FinishedWithError(v) => {
                 app_handle.emit("folder_scan_error", &v).unwrap();
             },
-            um_engine::State::Scanning(_) => {
+            um_engine::State::Scanning => {
                 app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
             },
             _ => (),
@@ -75,5 +90,5 @@ pub async fn start_folder_scan(
 	// // total files after.
 
 	// todo this shouldn't show in every case..
-	Ok(format!("Scan started..."))
+	Ok(format!("Scan in progress..."))
 }

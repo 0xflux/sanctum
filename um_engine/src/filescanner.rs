@@ -3,11 +3,12 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::Mutex, time::{Duration, Instant}};
+use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::{atomic::AtomicBool, Arc, Mutex}, thread, time::{Duration, Instant}};
 
 use sha2::{Sha256, Digest};
 use shared::constants::IOC_LIST_LOCATION;
 use serde::{Deserialize, Serialize};
+use tokio::{sync::watch, time::sleep};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum ScanType {
@@ -40,7 +41,8 @@ pub struct FileScanner {
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
     // state - The state of the scanner so we can lock it whilst scanning
-    pub state: Mutex<State>,
+    pub state: Arc<Mutex<State>>,
+    pub scanning_info: Arc<Mutex<ScanningLiveInfo>>,
 }
 
 
@@ -48,8 +50,8 @@ pub struct FileScanner {
 /// further information about the live-time information such as how many files have been scanned and time taken so far.
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub enum State {
-    Scanning(ScanningLiveInfo),
-    Finished(ScanningLiveInfo),
+    Scanning,
+    Finished,
     FinishedWithError(String),
     Inactive,
     Cancelled,
@@ -93,7 +95,8 @@ impl FileScanner {
         Ok(
             FileScanner {
                 iocs: bts,
-                state: Mutex::new(State::Inactive),
+                state: Arc::new(Mutex::new(State::Inactive)),
+                scanning_info: Arc::new(Mutex::new(ScanningLiveInfo::new())),
             }
         )
     }
@@ -109,11 +112,10 @@ impl FileScanner {
         }
 
         // get the data out of the state
-        if let State::Scanning(sli) = lock.clone() {
-            let scan_data = sli;
+        if let State::Scanning = lock.clone() {
             *lock = State::Cancelled; // update state
-
-            return Some(scan_data);
+            let sli = self.scanning_info.lock().unwrap();
+            return Some(sli.clone());
         }
 
         None
@@ -122,7 +124,7 @@ impl FileScanner {
 
     pub fn scan_started(&self) {
         let mut lock = self.state.lock().unwrap();
-        *lock = State::Scanning(ScanningLiveInfo::new());
+        *lock = State::Scanning;
     }
 
 
@@ -130,8 +132,8 @@ impl FileScanner {
     pub fn is_scanning(&self) -> bool {
         let lock = self.state.lock().unwrap();
         match *lock {
-            State::Scanning(_) => true,
-            State::Finished(_) => false,
+            State::Scanning => true,
+            State::Finished => false,
             State::FinishedWithError(_) => false,
             State::Inactive => false,
             State::Cancelled => false,
@@ -181,7 +183,7 @@ impl FileScanner {
             // otherwise, we will heap allocate 50 mb.
             //
 
-            const MAX_HEAP_SIZE: usize = 500000000; // 50 mb
+            const MAX_HEAP_SIZE: usize = 5000000; // 50 mb
 
             let alloc_size: usize = if let Ok(f) = file.metadata() {
                 let file_size = f.file_size() as usize;
@@ -214,6 +216,7 @@ impl FileScanner {
                     let lock = self.state.lock().unwrap();
                     if *lock == State::Cancelled {
                         // todo update the error type of this fn to something more flexible
+                        println!("[i] Returning...");
                         return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
                     }
                 }
@@ -243,24 +246,60 @@ impl FileScanner {
     /// scale for a folder scan, or used to initiate a system scan.
     pub fn begin_scan(&self, target: PathBuf) -> Result<State, io::Error> {
 
-        let mut scanning_info = ScanningLiveInfo::new();
+        let stop_clock = Arc::new(Mutex::new(false));
+        let clock_clone = Arc::clone(&stop_clock);
+        let self_scanning_info_clone = Arc::clone(&self.scanning_info);
 
-        if !target.is_dir() {
-            let res = self.scan_file_against_hashes(&target)?;
-            if let Some(v) = res {
-                scanning_info.scan_results.push(
-                    MatchedIOC {
-                        hash: v.0,
-                        file: v.1,
-                    }
-                );
-                
-                // result will contain the matched IOC
-                return Ok(State::Finished(scanning_info));
+        // timer in its own green thread
+        thread::spawn(move || {
+            let timer = Instant::now();
+
+            loop {
+                // first check if the task is cancelled
+                if *clock_clone.lock().unwrap() == true {
+                    break;
+                }
+
+                // not cancelled, so get the elapsed time
+                let elapsed = timer.elapsed();
+                {
+                    let mut lock = self_scanning_info_clone.lock().unwrap();
+                    lock.time_taken = elapsed;
+
+                }
+                std::thread::sleep(Duration::from_millis(10));
             }
+        });
+        
+        if !target.is_dir() {
+            let res = self.scan_file_against_hashes(&target);
+            match res {
+                Ok(res) => {
+                    if let Some(v) = res {
+                        let mut lock = self.scanning_info.lock().unwrap();
+                        lock.scan_results.push(
+                            MatchedIOC {
+                                hash: v.0,
+                                file: v.1,
+                            }
+                        );
+                        
+                        // result will contain the matched IOC
+                        *stop_clock.lock().unwrap() = true;
+                        return Ok(State::Finished);
+                    }
+                },
+                Err(e) => {
+                    *stop_clock.lock().unwrap() = true;
 
-            // results will be empty here
-            return Ok(State::Finished(scanning_info));
+                    if e.kind() == io::ErrorKind::Uncategorized {
+                        // results will be empty here
+                        return Ok(State::Cancelled);
+                    }
+
+                    return Err(e);
+                },
+            }
         }
 
         let mut discovered_dirs: Vec<PathBuf> = vec![target];
@@ -291,6 +330,7 @@ impl FileScanner {
                     if *lock == State::Cancelled {
                         // todo update the error type of this fn to something more flexible
                         println!("[i] Dirs left: {}", discovered_dirs.len());
+                        *stop_clock.lock().unwrap() = true;
                         return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
                     }
                 }
@@ -316,13 +356,14 @@ impl FileScanner {
                     Ok(v) => {
                         if v.is_some() {
                             let v = v.unwrap();
-                            scanning_info.scan_results.push(MatchedIOC {
+                            let mut lock = self.scanning_info.lock().unwrap();
+                            lock.scan_results.push(MatchedIOC {
                                 hash: v.0,
                                 file: v.1,
                             });
                         }
                     },
-                    Err(e) => eprintln!("[-] Error scanning dir: {e}"),
+                    Err(e) => eprintln!("[-] Error scanning: {e}"),
                 }
 
                 let elapsed = now.elapsed().as_millis();
@@ -336,7 +377,9 @@ impl FileScanner {
 
         println!("[i] Min: {:?}, Max: {:?}", min_val, max_val);
 
-        Ok(State::Finished(scanning_info))
+        *stop_clock.lock().unwrap() = true;
+
+        Ok(State::Finished)
 
     }
 
@@ -347,11 +390,3 @@ impl FileScanner {
     }
 
 }
-
-// impl GuiPage for FileScanner {
-//     fn get_state<T>(&self) -> T {
-        
-//         let scanning = self.is_scanning();
-        
-//     }
-// }

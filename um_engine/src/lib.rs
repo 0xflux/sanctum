@@ -1,5 +1,5 @@
 #![feature(io_error_uncategorized)]
-use std::{io, path::PathBuf, time::Instant};
+use std::{io, path::PathBuf};
 
 use driver_manager::SanctumDriverManager;
 use filescanner::{FileScanner, ScanningLiveInfo};
@@ -46,7 +46,6 @@ impl UmEngine {
         }
         let file_scanner = scanner.unwrap();
 
-
         UmEngine{
             driver_manager,
             file_scanner,
@@ -66,7 +65,7 @@ impl UmEngine {
         
         // check whether a scan is active
         if self.file_scanner.is_scanning() {
-            return State::Scanning(ScanningLiveInfo::new());
+            return State::Scanning;
         }
 
         self.file_scanner.scan_started(); // update state
@@ -97,6 +96,11 @@ impl UmEngine {
     pub fn scanner_get_state(&self) -> State {
         self.file_scanner.get_state()
     }
+
+
+    pub fn scanner_get_scan_data(&self) -> ScanningLiveInfo {
+        self.file_scanner.scanning_info.lock().unwrap().clone()
+    }
 }
 
 
@@ -107,7 +111,6 @@ impl UmEngine {
 #[allow(dead_code)]
 fn user_input_loop(
     driver_manager: &mut SanctumDriverManager,
-    scanner: &FileScanner
 ) -> Option<()> {
     loop {
         println!("Make your selection below:");

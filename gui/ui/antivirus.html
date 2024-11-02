@@ -13,22 +13,29 @@
 		const { invoke } = window.__TAURI__.core;
 		const { listen } = window.__TAURI__.event;
 
+		const possibleStates = ['Scanning', 'Finished', 'FinishedWithError', 'Inactive', 'Cancelled'];
+
 		const TIMEOUT_WAIT = 20;
 
 		//
 		// Page initialisation
 		//
 		let scan_in_progress = false;
-		var state = invoke('check_page_state')
+		invoke('check_page_state')
 			.then((state) => {
-				let json_object = JSON.parse(state);
-
-				// check whether we are scanning or not to set up the page
-				if (json_object.hasOwnProperty('Scanning')) {
-					scan_in_progress = true;
+				if (possibleStates.includes(state)) {
+					console.log(`Starting state: ${state}`);
+					if (state === 'Scanning') {
+						console.log("Starting state is scanning");
+						write_live_scan_stats();
+						scan_in_progress = true;
+					} else {
+						console.log("Starting state is NOT scanning");
+						scan_in_progress = false;
+					}
 					set_scan_button_state(scan_in_progress);
 				} else {
-					set_scan_button_state(scan_in_progress);
+					console.error(`Unexpected state received: ${state}`);
 				}
 			})
 			.catch((error) => console.error("Invoke error:", error));
@@ -140,20 +147,25 @@
 			if (scan_in_progress) {
 
 				invoke('check_page_state')
-					.then((response) => {
-						let json_object = JSON.parse(response);
-						if (json_object.hasOwnProperty('Scanning')) {
-							console.log('The state is Scanning.');
+					.then((state) => {
+						if (possibleStates.includes(state)) {
+							if (state === 'Scanning') {
+								
+								// if we are scanning, make another call to get the stats
+								write_live_scan_stats();
+
+							} else {
+								console.log("Starting state is NOT scanning");
+								scan_in_progress = false;
+								RETURN;
+							}
 						} else {
-							console.log('The state is NOT Scanning.');
-							scan_in_progress = false;
-							return;
+							console.error(`Unexpected state received: ${state}`);
 						}
-					})
-					.catch((error) => console.error("Invoke error:", error));
+					}).catch((error) => console.error("Invoke error:", error));
 			}
 
-			setTimeout( check_page_state, 500 ); // tick every half second
+			setTimeout( check_page_state, 1000 ); // tick speed
 		})();
 
 		//
@@ -167,6 +179,17 @@
 			} else {
 				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\" id=\"scan_submit_btn\">Scan</button>";
 			}
+		}
+
+
+		function write_live_scan_stats() {
+			invoke('get_scan_stats')
+				.then((stats) => {
+					console.log("Stats: ", stats)
+					const parsed_stats = JSON.parse(stats);
+					console.log("Parsed stats: ", stats)
+					document.getElementById("folder_scan_result").textContent = `Scan in progress... Time taken: ${parsed_stats.time_taken.secs}s.`;
+				}).catch((error) => console.error("Invoke error:", error));
 		}
 	});
 	</script>
