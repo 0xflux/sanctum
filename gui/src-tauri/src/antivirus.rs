@@ -28,9 +28,6 @@ pub fn get_scan_stats(
     let engine = Arc::clone(&engine);
 
     let data = serde_json::to_string(&engine.scanner_get_scan_data()).unwrap_or(String::new());
-
-    // todo from here, regular poll of status of the scan - maybe every second
-    // this should also fetch data on files scanned, time taken, etc.
     Ok(data)
 }
 

@@ -74,6 +74,12 @@ impl ScanningLiveInfo {
             scan_results: Vec::<MatchedIOC>::new(),
         }
     }
+
+    fn reset(&mut self) {
+        self.num_files_scanned = 0;
+        self.scan_results = Vec::new();
+        self.time_taken = Duration::new(0, 0);
+    }
 }
 
 
@@ -107,24 +113,24 @@ impl FileScanner {
         let mut lock = self.state.lock().unwrap();
 
         // check we are scanning, if not return
-        if *lock == State::Cancelled || *lock == State::Inactive {
-            return None;
-        }
-
-        // get the data out of the state
-        if let State::Scanning = lock.clone() {
+        if *lock == State::Scanning {
             *lock = State::Cancelled; // update state
             let sli = self.scanning_info.lock().unwrap();
-            return Some(sli.clone());
-        }
 
-        None
+            println!("[i] Scanning time: {:?}", self.scanning_info.lock().unwrap().time_taken);
+
+            return Some(sli.clone());
+        } 
+
+        return None;
     }
 
 
     pub fn scan_started(&self) {
         let mut lock = self.state.lock().unwrap();
         *lock = State::Scanning;
+        // reset the stats
+        self.scanning_info.lock().unwrap().reset();
     }
 
 
@@ -151,7 +157,6 @@ impl FileScanner {
     pub fn end_scan(&self) {
         let mut lock = self.state.lock().unwrap();
         *lock = State::Inactive;
-        // self.is_scanning.store(false, Ordering::SeqCst);
     }
 
 
