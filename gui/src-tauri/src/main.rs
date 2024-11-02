@@ -7,7 +7,7 @@
 mod antivirus;
 
 use std::sync::Arc;
-use antivirus::{check_page_state, start_folder_scan, start_individual_file_scan};
+use antivirus::{check_page_state, start_folder_scan, stop_scan};
 use um_engine::UmEngine;
 
 #[tokio::main]
@@ -20,8 +20,8 @@ async fn main() {
 	.manage(um_engine)
 		.invoke_handler(tauri::generate_handler![
 			start_folder_scan, 
-			start_individual_file_scan, 
 			check_page_state,
+			stop_scan,
 			])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

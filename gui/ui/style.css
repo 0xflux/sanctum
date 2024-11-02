@@ -122,3 +122,8 @@ div.full_callout button.single_box_button {
 p.error_msg {
     color: crimson;
 }
+
+#scan_button {
+    display: inline;
+    width: 12%;
+}

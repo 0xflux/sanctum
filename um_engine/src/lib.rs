@@ -2,7 +2,7 @@
 use std::{io, path::PathBuf, time::Instant};
 
 use driver_manager::SanctumDriverManager;
-use filescanner::FileScanner;
+use filescanner::{FileScanner, ScanningLiveInfo};
 pub use filescanner::{MatchedIOC, ScanResult, ScanType, State};
 
 mod driver_manager;
@@ -62,28 +62,38 @@ impl UmEngine {
     /// 
     /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
     /// allowing the function to conduct different types of scan. This will need checking in the calling function.
-    pub fn scanner_start_scan(&self, target: PathBuf, scan_type: ScanType) -> ScanResult {
+    pub fn scanner_start_scan(&self, target: PathBuf) -> State {
         
         // check whether a scan is active
-        println!("[i] Scanning result: {}", self.file_scanner.is_scanning());
         if self.file_scanner.is_scanning() {
-            return ScanResult::ScanInProgress; 
+            return State::Scanning(ScanningLiveInfo::new());
         }
 
-        self.file_scanner.scan_started(scan_type.clone()); // update state
+        self.file_scanner.scan_started(); // update state
 
         // send the job for a scan
-        let result = match scan_type {
-            ScanType::File => ScanResult::FileResult(self.file_scanner.scan_file_against_hashes(target)),
-            ScanType::Folder => ScanResult::DirectoryResult(self.file_scanner.scan_from_folder_all_children(target)),
-        };
+        let result = self.file_scanner.scan_from_folder_all_children(target);
 
         self.file_scanner.end_scan(); // update state
 
-        result
+        let result = match result {
+            Ok(state) => state,
+            Err(e) => {
+                State::FinishedWithError(e.to_string())
+            },
+        };
 
+        result
     }
 
+
+    /// Instructs the scanner to cancel its scan, returning information about the results
+    pub fn scanner_cancel_scan(&self) {
+        self.file_scanner.cancel_scan();
+    }
+
+
+    /// Gets the state of the scanner module
     pub fn scanner_get_state(&self) -> State {
         self.file_scanner.get_state()
     }
@@ -157,38 +167,38 @@ fn user_input_loop(
             },
 
             8 => {
-                // scan a file against hashes
-                let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("[-] Scanner error: {e}");
-                        None
-                    },
-                };
+                // // scan a file against hashes
+                // let res = match scanner.scan_file_against_hashes(PathBuf::from("MALWARE.ps1")) {
+                //     Ok(v) => v,
+                //     Err(e) => {
+                //         eprintln!("[-] Scanner error: {e}");
+                //         None
+                //     },
+                // };
 
-                if let Some(r) = res {
-                    println!("[+] Malware found, Hash: {}, file name: {}", r.0, r.1.display());
-                }
+                // if let Some(r) = res {
+                //     println!("[+] Malware found, Hash: {}, file name: {}", r.0, r.1.display());
+                // }
             }
 
             9 => {
-                let now = Instant::now();
-                // scan a folder for malware
-                let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
+                // let now = Instant::now();
+                // // scan a folder for malware
+                // let scan_results = scanner.scan_from_folder_all_children(PathBuf::from("C:\\"));
 
-                match scan_results {
-                    Ok(results) => {
-                        if !results.is_empty() {
-                            println!("[+] Malware found: {:?}", results);
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("[-] Folder scan returned error: {e}");
-                    }
-                }
+                // match scan_results {
+                //     Ok(results) => {
+                //         if !results.is_empty() {
+                //             println!("[+] Malware found: {:?}", results);
+                //         }
+                //     },
+                //     Err(e) => {
+                //         eprintln!("[-] Folder scan returned error: {e}");
+                //     }
+                // }
 
-                let elapsed = now.elapsed().as_secs();
-                println!("[i] Took: {elapsed} secs. Mins: {}", elapsed * 60);
+                // let elapsed = now.elapsed().as_secs();
+                // println!("[i] Took: {elapsed} secs. Mins: {}", elapsed * 60);
             }
 
             _ => {

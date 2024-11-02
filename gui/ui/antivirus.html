@@ -18,18 +18,18 @@
 		//
 		// Page initialisation
 		//
-		var scan_in_progress = false;
+		let scan_in_progress = false;
 		var state = invoke('check_page_state')
 			.then((state) => {
 				let json_object = JSON.parse(state);
-				if (json_object.hasOwnProperty('Scanning')) {
-					console.log('The state is Scanning.');
-					scan_in_progress = true;
-				} else {
-					console.log('The state is NOT Scanning.');
-				}
 
-				console.log("Page state:", state);
+				// check whether we are scanning or not to set up the page
+				if (json_object.hasOwnProperty('Scanning')) {
+					scan_in_progress = true;
+					set_scan_button_state(scan_in_progress);
+				} else {
+					set_scan_button_state(scan_in_progress);
+				}
 			})
 			.catch((error) => console.error("Invoke error:", error));
 
@@ -37,42 +37,22 @@
 		// Listeners
 		//
 
-		// scan complete from backend
-		listen("scan_complete", function (scanEvent) {
-			const scanResult = scanEvent.payload;
-			scan_in_progress = false;
-			console.log("Scan result received:", scanResult);
-
-			setTimeout(() => {
-				document.getElementById("single_file_scan_result").textContent = scanResult;
-				document.getElementById("single_file_scan_error").textContent = "";
-			}, TIMEOUT_WAIT);
-		});
-		// error from single file scan
-		listen("scan_error", function (scanEvent) {
-			const scanResult = scanEvent.payload;
-			scan_in_progress = false;
-
-			setTimeout(() => {
-				document.getElementById("single_file_scan_result").textContent = "" // blank the "started scan" msg
-				document.getElementById("single_file_scan_error").textContent = scanResult;
-			}, TIMEOUT_WAIT);
-		});
-
-		// scan complete for folder - no results
+		// scan complete - no results
 		listen("folder_scan_no_results", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 			scan_in_progress = false;
+			set_scan_button_state(scan_in_progress);
 
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = scanResult;
 				document.getElementById("folder_scan_err").textContent = "";
 			}, TIMEOUT_WAIT);
 		});
-		// scan complete for folder - malware
+		// scan complete - malware
 		listen("folder_scan_malware_found", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 			scan_in_progress = false;
+			set_scan_button_state(scan_in_progress);
 
 			console.log("Scan result received:", scanResult);
 			const resultContainer = document.getElementById("folder_scan_result");
@@ -81,7 +61,7 @@
 				resultContainer.textContent = ""; 
 
 				// iterate through the results and print as a new paragraph
-				scanResult.forEach((result) => {
+				scanResult.scan_results.forEach((result) => {
 					const resultItem = document.createElement("p");
 					resultItem.textContent = `Malware found. File: ${result.file}, Hash: ${result.hash}`;
 					resultContainer.appendChild(resultItem);
@@ -94,6 +74,7 @@
 		listen("folder_scan_error", function (scanEvent) {
 			const scanResult = scanEvent.payload;
 			scan_in_progress = false;
+			set_scan_button_state(scan_in_progress);
 
 			setTimeout(() => {
 				document.getElementById("folder_scan_result").textContent = "" // blank the "started scan" msg
@@ -106,44 +87,41 @@
 		// Events
 		//
 
-		// submitting a single file for analysis
-		var submit_single_file_for_scan = function(event) {
-			event.preventDefault();
-			const filePath = document.getElementById("file_path_input").value;
-
-			// todo add check here for if is scanning
-			scan_in_progress = true;
-
-			invoke('start_individual_file_scan', { filePath: filePath })
-				.then((response) => {
-					document.getElementById("single_file_scan_result").innerHTML = response;
-				})
-				.catch((error) => console.error("Invoke error:", error));
-		};
-
 		// submitting a folder for analysis
 		var submit_folder_for_scan = function(event) {
 			event.preventDefault();
-			const file_path = document.getElementById("folder_path_input").value;
+			const file_path = document.getElementById("folder_path_input").value;			
 
-			// todo add check here for if is scanning
-			scan_in_progress = true;
+			// if we are scanning, the button click will be for cancelling
+			if (scan_in_progress) {
+				document.getElementById("folder_scan_err").textContent = "User cancelled scan.";
+				scan_in_progress = false;
+				set_scan_button_state(scan_in_progress);
 
-			invoke('start_folder_scan', { filePath: file_path })
-				.then((response) => {
-					document.getElementById("folder_scan_result").innerHTML = response;
-				})
-				.catch((error) => console.error("Invoke error:", error));
+				invoke('stop_scan')
+					.then((response) => {
+						document.getElementById("folder_scan_result").innerHTML = response;
+					})
+					.catch((error) => console.error("Invoke error:", error));
+
+			} else {
+				// otherwise it will be for starting the scan
+				scan_in_progress = true;
+				set_scan_button_state(scan_in_progress);
+				document.getElementById("folder_scan_err").textContent = ""
+
+				invoke('start_folder_scan', { filePath: file_path })
+					.then((response) => {
+						document.getElementById("folder_scan_result").innerHTML = response;
+					})
+					.catch((error) => console.error("Invoke error:", error));
+			}			
 		};
 
 
 		//
 		// Event listeners
 		//
-
-		// submit single file for analysis
-		var single_file_form = document.getElementById("file_scan_form");
-		single_file_form.addEventListener('submit', submit_single_file_for_scan, false);
 
 		// submit folder for analysis
 		var folder_submission_form = document.getElementById("folder_scan_form");
@@ -170,9 +148,22 @@
 					})
 					.catch((error) => console.error("Invoke error:", error));
 			}
-			
+
 			setTimeout( check_page_state, 500 ); // tick every half second
 		})();
+
+		//
+		// Functions
+		//
+
+		/// Toggles the scanning state for the bool, and determines which page elements to show
+		function set_scan_button_state(is_scanning) {
+			if (is_scanning) {
+				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\">Cancel</button>";
+			} else {
+				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\">Scan</button>";
+			}
+		}
 	});
 	</script>
 
@@ -189,25 +180,18 @@
 					relating to malware.
 				</p>
 
-				<!-- Single file scan -->
-				<div class="full_callout">
-					<b>Individual file scan</b>
-					<p>Enter the file path for the file you wish to scan...</p>
-					<form action="#" id="file_scan_form">
-						<input type="text" autocomplete="off" placeholder="Enter file path" id="file_path_input" />
-						<button type="submit" class="single_box_button">Scan!</button>
-						<p id="single_file_scan_result"></p>
-						<p id="single_file_scan_error" class="error_msg"></p>
-					</form>
-				</div>
-
 				<!-- Folder scan -->
 				<div class="full_callout">
-					<b>Folder / full disk scan</b>
-					<p>Enter the directory root you wish to scan, if you wish to scan the full filesystem you should indicate the drive letter, such as C:\. At the moment this doesn't support scanning all connected drives from the push of a button.</p>
+					<b>File / Folder scan</b>
+					<p>Enter either the path to the fil you wish to scan, or the directory root you wish to scan. If you wish to scan the full filesystem you should indicate the drive letter, such as C:\.</p>
 					<form action="#" id="folder_scan_form">
 						<input type="text" value="C:\" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
-						<button type="submit" class="single_box_button">Scan!</button>
+
+						<!-- Js will put the button here -->
+						<div id="scan_button">
+							<button type="submit" class="single_box_button">Scan</button>
+						</div>
+
 						<p id="folder_scan_result"></p>
 						<p id="folder_scan_err" class="error_msg"></p>
 					</form>
