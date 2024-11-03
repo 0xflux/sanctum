@@ -269,10 +269,7 @@ impl FileScanner {
                     }
                 }
             }
-        }
-        
-        println!("[i sd idoxops {:?}", discovered_dirs);
-        
+        }        
 
         let stop_clock = Arc::new(Mutex::new(false));
         let clock_clone = Arc::clone(&stop_clock);
