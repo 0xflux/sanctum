@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::get_logged_in_username;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct SanctumSettings {
     pub common_scan_areas: Vec<PathBuf>,
 }
@@ -12,9 +12,9 @@ pub struct SanctumSettings {
 impl SanctumSettings {
     pub fn load() -> Self {
         let username = get_logged_in_username().unwrap();
-        let base_path = format!("C:\\Users\\{username}\\AppData\\Roaming\\Sanctum\\");
-        let dir = PathBuf::from(&base_path);
-        let path = PathBuf::from(format!("{}\\config.cfg", base_path));
+        let paths = get_setting_paths(&username);
+        let dir = paths.0;
+        let path = paths.1;
 
         // if the path doesn't exist, the app is likely running for the first time, so configure any app defaults
         let settings = if !dir.exists() {
@@ -39,4 +39,13 @@ impl SanctumSettings {
 
         settings
     }
+}
+
+ /// Get the base path and file name of the settings file, from the AppData folder.
+ pub fn get_setting_paths(username: &String) -> (PathBuf, PathBuf) {
+    let base_path = format!("C:\\Users\\{username}\\AppData\\Roaming\\Sanctum\\");
+    let dir = PathBuf::from(&base_path);
+    let path = PathBuf::from(format!("{}\\config.cfg", base_path));
+
+    (dir, path)
 }

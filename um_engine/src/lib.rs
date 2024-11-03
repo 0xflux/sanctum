@@ -1,10 +1,12 @@
 #![feature(io_error_uncategorized)]
-use std::{io, path::PathBuf};
+use std::{fs, io, path::PathBuf, sync::{Arc, Mutex}};
 
 use driver_manager::SanctumDriverManager;
 use filescanner::{FileScanner, ScanningLiveInfo};
 pub use filescanner::{MatchedIOC, ScanResult, ScanType, State};
+use settings::get_setting_paths;
 pub use settings::SanctumSettings;
+use utils::get_logged_in_username;
 
 mod driver_manager;
 mod strings;
@@ -26,7 +28,7 @@ mod utils;
 pub struct UmEngine {
     pub driver_manager: SanctumDriverManager,   // the interface for managing the driver
     pub file_scanner: FileScanner,
-    pub sanctum_settings: SanctumSettings,
+    pub sanctum_settings: Arc<Mutex<SanctumSettings>>,
 }
 
 impl UmEngine {
@@ -49,6 +51,9 @@ impl UmEngine {
             panic!("[-] Failed to initialise scanner: {e}.");
         }
         let file_scanner = scanner.unwrap();
+
+        // settings
+        let sanctum_settings = Arc::new(Mutex::new(sanctum_settings));
 
         UmEngine{
             driver_manager,
@@ -105,6 +110,27 @@ impl UmEngine {
 
     pub fn scanner_get_scan_data(&self) -> ScanningLiveInfo {
         self.file_scanner.scanning_info.lock().unwrap().clone()
+    }
+
+
+    //
+    // Settings
+    // 
+
+    pub fn settings_get_common_scan_areas(&self) -> Vec<PathBuf> {
+        let lock = self.sanctum_settings.lock().unwrap();
+        lock.common_scan_areas.clone()
+    }
+
+    pub fn settings_update_settings(&self, settings: SanctumSettings) {
+        // change the live state
+        let mut lock = self.sanctum_settings.lock().unwrap();
+        *lock = settings.clone();
+
+        // write the new file
+        let settings_str = serde_json::to_string(&settings).unwrap();
+        let path = get_setting_paths(&get_logged_in_username().unwrap()).1;
+        fs::write(path, settings_str).unwrap();
     }
 }
 

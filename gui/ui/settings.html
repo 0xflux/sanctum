@@ -13,6 +13,8 @@
 			const { invoke } = window.__TAURI__.core;
 			const { listen } = window.__TAURI__.event;
 
+			const common_scan_dir_box = document.getElementById('common_scan_dirs');
+
 			//
 			// Page initialisation
 			//
@@ -21,17 +23,41 @@
 				console.log("res: ", res);
 				const jsonObject = JSON.parse(res);
 				const common_scan_areas = 'common_scan_areas';
-				const outputBox = document.getElementById('common_scan_dirs');
 
 				if (Array.isArray(jsonObject[common_scan_areas])) {
 					jsonObject[common_scan_areas].forEach(item => {
-						outputBox.value = jsonObject[common_scan_areas].join('\n');
+						common_scan_dir_box.value = jsonObject[common_scan_areas].join('\n');
 					});
 				} else {
 					console.log(`Key "${common_scan_areas}" is not an array or does not exist.`);
 				}
 			})
 			.catch((error) => console.error("Invoke error:", error));
+
+
+			//
+			// Events
+			//
+
+			var update_app_settings = function(event) {
+				event.preventDefault();
+
+				const common_scan_dir_box_val = common_scan_dir_box.value;
+				const lines = common_scan_dir_box_val.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+				const settings = {
+					common_scan_areas: lines
+				};
+
+				invoke('settings_update_settings', { settings: JSON.stringify(settings) })
+				.then((response) => {
+					console.log("response: ", response)
+				})
+				.catch((error) => console.error("Invoke error:", error));
+			};
+
+			var update_app_settings_form = document.getElementById("app_settings_callout");
+			update_app_settings_form.addEventListener('submit', update_app_settings, false);
+
 
 		});
 	</script>
@@ -48,6 +74,7 @@
 				<p>The settings page.</p>
 				<div id="app_settings_callout" class="full_callout">
 					<b>Application settings</b>
+					<p>Enter on new lines folders to scan which are included in the common scan. The defaults are provided for you and are recommended.</p>
 					<form action="#" id="app_settings_form">
 						<textarea id="common_scan_dirs" rows="10" cols="70" placeholder="Type something and press Enter..."></textarea>
 						<button type="submit" id="app_settings_submit">Update</button>

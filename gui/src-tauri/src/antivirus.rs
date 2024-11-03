@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use um_engine::UmEngine;
 
 #[tauri::command]
-pub fn check_page_state(
+pub fn scanner_check_page_state(
     engine: State<'_, Arc<UmEngine>>,
 ) -> Result<String, ()> {
 
@@ -21,7 +21,7 @@ pub fn check_page_state(
 
 /// Reports the scan statistics back to the UI 
 #[tauri::command]
-pub fn get_scan_stats(
+pub fn scanner_get_scan_stats(
     engine: State<'_, Arc<UmEngine>>,
 ) -> Result<String, ()> {
 
@@ -34,7 +34,7 @@ pub fn get_scan_stats(
 
 
 #[tauri::command]
-pub async fn stop_scan(
+pub async fn scanner_stop_scan(
     engine: State<'_, Arc<UmEngine>>,
 ) -> Result<(), ()> {  
 
@@ -47,7 +47,7 @@ pub async fn stop_scan(
 
 
 #[tauri::command]
-pub async fn start_folder_scan(
+pub async fn scanner_start_folder_scan(
     file_path: String,
     engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
@@ -90,14 +90,14 @@ pub async fn start_folder_scan(
 
 
 #[tauri::command]
-pub async fn start_quick_scan(
+pub async fn scanner_start_quick_scan(
     engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
 
 	let engine = Arc::clone(&engine);
 
-    let paths = engine.sanctum_settings.common_scan_areas.clone();
+    let paths = engine.settings_get_common_scan_areas();
 
 	tokio::spawn(async move {
         // The result is wrapped inside of an enum from the filescanner module, so we need to first match on that

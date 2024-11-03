@@ -17,11 +17,12 @@
 
 		const TIMEOUT_WAIT = 20;
 
+
 		//
 		// Page initialisation
 		//
 		let scan_in_progress = false;
-		invoke('check_page_state')
+		invoke('scanner_check_page_state')
 			.then((state) => {
 				if (possibleStates.includes(state)) {
 					console.log(`Starting state: ${state}`);
@@ -39,6 +40,8 @@
 				}
 			})
 			.catch((error) => console.error("Invoke error:", error));
+
+
 
 		//
 		// Listeners
@@ -93,6 +96,7 @@
 		});
 
 
+
 		//
 		// Events
 		//
@@ -106,7 +110,7 @@
 			set_scan_button_state(scan_in_progress);
 			document.getElementById("folder_scan_err").textContent = ""
 
-			invoke('start_folder_scan', { filePath: file_path })
+			invoke('scanner_start_folder_scan', { filePath: file_path })
 				.then((response) => {
 					document.getElementById("folder_scan_result").innerHTML = response;
 				})
@@ -121,7 +125,7 @@
 			set_scan_button_state(scan_in_progress);
 			document.getElementById("folder_scan_err").textContent = ""
 
-			invoke('start_quick_scan')
+			invoke('scanner_start_quick_scan')
 				.then((response) => {
 					document.getElementById("folder_scan_result").innerHTML = response;
 				})
@@ -137,7 +141,7 @@
 			scan_in_progress = false;
 			set_scan_button_state(scan_in_progress);
 
-			invoke('stop_scan')
+			invoke('scanner_stop_scan')
 				.then((response) => {
 					write_live_scan_stats("Scan cancelled.")
 					document.getElementById("folder_scan_result").innerHTML = response;
@@ -148,12 +152,6 @@
 				});
 		};
 
-
-		//
-		// Event listeners
-		//
-
-		// submit folder for analysis
 		var folder_submission_form = document.getElementById("folder_scan_form");
 		folder_submission_form.addEventListener('submit', submit_folder_for_scan, false);
 
@@ -167,11 +165,11 @@
 		//
 		// Async page state
 		//
-		(function check_page_state() {
+		(function scanner_check_page_state() {
 			
 			if (scan_in_progress) {
 
-				invoke('check_page_state')
+				invoke('scanner_check_page_state')
 					.then((state) => {
 						if (possibleStates.includes(state)) {
 							if (state === 'Scanning') {
@@ -190,7 +188,7 @@
 					}).catch((error) => console.error("Invoke error:", error));
 			}
 
-			setTimeout( check_page_state, 500 ); // tick speed
+			setTimeout( scanner_check_page_state, 500 ); // tick speed
 		})();
 
 
@@ -220,7 +218,7 @@
 
 
 		function write_live_scan_stats(scan_text) {
-			invoke('get_scan_stats')
+			invoke('scanner_get_scan_stats')
 				.then((stats) => {
 					const parsed_stats = JSON.parse(stats);
 
