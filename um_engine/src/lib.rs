@@ -61,7 +61,7 @@ impl UmEngine {
     /// 
     /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
     /// allowing the function to conduct different types of scan. This will need checking in the calling function.
-    pub fn scanner_start_scan(&self, target: PathBuf) -> State {
+    pub fn scanner_start_scan(&self, target: Vec<PathBuf>) -> State {
         
         // check whether a scan is active
         if self.file_scanner.is_scanning() {

@@ -116,7 +116,7 @@ impl FileScanner {
         if *lock == State::Scanning {
             *lock = State::Cancelled; // update state
             let sli = self.scanning_info.lock().unwrap();
-            
+
             return Some(sli.clone());
         } 
 
@@ -252,7 +252,25 @@ impl FileScanner {
 
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub fn begin_scan(&self, target: PathBuf) -> Result<State, io::Error> {
+    pub fn begin_scan(&self, target: Vec<PathBuf>) -> Result<State, io::Error> {
+        
+        let mut discovered_dirs: Vec<PathBuf> = target;
+
+        // If the target is a directory, then add it back to the discovered dirs as that will be iterated
+        // separate to the target - target is just used for scanning a single file.
+        // This could be refactored at a later date so this check is done more inline below whilst still adhering
+        // to how the functionality works.
+        let target = match discovered_dirs.pop() {
+            Some(t) => {
+                if t.is_dir() {
+                    discovered_dirs.push(t.clone());
+                }
+                t
+            },
+            None => {
+                return Err(io::Error::new(io::ErrorKind::Uncategorized, "Input was empty."));
+            },
+        };
 
         let stop_clock = Arc::new(Mutex::new(false));
         let clock_clone = Arc::clone(&stop_clock);
@@ -323,7 +341,6 @@ impl FileScanner {
             }
         }
 
-        let mut discovered_dirs: Vec<PathBuf> = vec![target];
         let mut time_map: BTreeMap<u128, PathBuf> = BTreeMap::new();
 
         while !discovered_dirs.is_empty() {

@@ -102,35 +102,50 @@
 			event.preventDefault();
 			const file_path = document.getElementById("folder_path_input").value;			
 
-			// if we are scanning, the button click will be for cancelling
-			if (scan_in_progress) {
-				document.getElementById("folder_scan_err").textContent = "User cancelled scan.";
-				// disable the button to wait for the app to respond
-				document.getElementById("scan_submit_btn").disabled = true;
-				
-				invoke('stop_scan')
-					.then((response) => {
-						write_live_scan_stats("Scan cancelled.")
-						document.getElementById("folder_scan_result").innerHTML = response;
-						scan_in_progress = false;
-						set_scan_button_state(scan_in_progress);
-					})
-					.catch((error) => {
-						console.error("Invoke error:", error);
-						document.getElementById("scan_submit_btn").disabled = false;
-					});
-			} else {
-				// otherwise it will be for starting the scan
-				scan_in_progress = true;
-				set_scan_button_state(scan_in_progress);
-				document.getElementById("folder_scan_err").textContent = ""
+			scan_in_progress = true;
+			set_scan_button_state(scan_in_progress);
+			document.getElementById("folder_scan_err").textContent = ""
 
-				invoke('start_folder_scan', { filePath: file_path })
-					.then((response) => {
-						document.getElementById("folder_scan_result").innerHTML = response;
-					})
-					.catch((error) => console.error("Invoke error:", error));
-			}			
+			invoke('start_folder_scan', { filePath: file_path })
+				.then((response) => {
+					document.getElementById("folder_scan_result").innerHTML = response;
+				})
+				.catch((error) => console.error("Invoke error:", error));
+		};
+
+		// Quick scan!
+		var submit_quick_scan = function(event) {
+			event.preventDefault();
+
+			scan_in_progress = true;
+			set_scan_button_state(scan_in_progress);
+			document.getElementById("folder_scan_err").textContent = ""
+
+			invoke('start_quick_scan')
+				.then((response) => {
+					document.getElementById("folder_scan_result").innerHTML = response;
+				})
+				.catch((error) => console.error("Invoke error:", error));
+		};
+
+		// cancel scan!
+		var cancel_scan = function(event) {
+			event.preventDefault();
+
+			console.log("Cancelled..");
+
+			scan_in_progress = false;
+			set_scan_button_state(scan_in_progress);
+
+			invoke('stop_scan')
+				.then((response) => {
+					write_live_scan_stats("Scan cancelled.")
+					document.getElementById("folder_scan_result").innerHTML = response;
+					scan_in_progress = false;
+				})
+				.catch((error) => {
+					console.error("Invoke error:", error);
+				});
 		};
 
 
@@ -141,6 +156,12 @@
 		// submit folder for analysis
 		var folder_submission_form = document.getElementById("folder_scan_form");
 		folder_submission_form.addEventListener('submit', submit_folder_for_scan, false);
+
+		var quick_scan_form = document.getElementById("quick_scan_form");
+		quick_scan_form.addEventListener('submit', submit_quick_scan, false);
+
+		var cancel_scan_form = document.getElementById("cancel_scan_form");
+		cancel_scan_form.addEventListener('submit', cancel_scan, false);
 
 
 		//
@@ -169,8 +190,9 @@
 					}).catch((error) => console.error("Invoke error:", error));
 			}
 
-			setTimeout( check_page_state, 1000 ); // tick speed
+			setTimeout( check_page_state, 500 ); // tick speed
 		})();
+
 
 		//
 		// Functions
@@ -179,9 +201,20 @@
 		/// Toggles the scanning state for the bool, and determines which page elements to show
 		function set_scan_button_state(is_scanning) {
 			if (is_scanning) {
-				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\"  id=\"scan_submit_btn\">Cancel</button>";
+				// disable scan buttons and enable the cancel button
+				const controlButtons = document.querySelectorAll(".scan_control_button");
+				controlButtons.forEach(button => {
+					button.disabled = true;
+				});
+
+				document.getElementById("cancel_scan_form").innerHTML = "<button type=\"submit\" class=\"single_box_button\"  id=\"scan_cancel\">Cancel</button>";
 			} else {
-				document.getElementById("scan_button").innerHTML = "<button type=\"submit\" class=\"single_box_button\" id=\"scan_submit_btn\">Scan</button>";
+				// enable scan buttons and enable the cancel button
+				const controlButtons = document.querySelectorAll(".scan_control_button");
+				controlButtons.forEach(button => {
+					button.disabled = false;
+				});
+				document.getElementById("cancel_scan_form").innerHTML = "";
 			}
 		}
 
@@ -189,9 +222,7 @@
 		function write_live_scan_stats(scan_text) {
 			invoke('get_scan_stats')
 				.then((stats) => {
-					console.log("Stats: ", stats)
 					const parsed_stats = JSON.parse(stats);
-					console.log("Parsed stats: ", stats)
 
 					let txt = `${scan_text} Time taken: ${parsed_stats.time_taken.secs}s. Number of files scanned: ${parsed_stats.num_files_scanned}`;
 
@@ -214,21 +245,37 @@
 					relating to malware.
 				</p>
 
-				<!-- Folder scan -->
+				<!-- For the scan results -->
+				<div id="scanResultBox">
+					<p id="folder_scan_stats"></p>
+					<p id="folder_scan_result"></p>
+					<p id="folder_scan_err" class="error_msg"></p>
+					<form action="#" id="cancel_scan_form">
+					</form>
+				</div>
+				
+				<!-- Main page -->
+				<div class="full_callout">
+					<b>Quick scan</b>
+					<p>Scans places commonly abused by malware.</p>
+					<form action="#" id="quick_scan_form">
+						<input type="text" value="C:\" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
+
+						<div id="scan_button">
+							<button type="submit" class="single_box_button scan_control_button" id="quick_scan_submit">Scan</button>
+						</div>
+					</form>
+				</div>
+
 				<div class="full_callout">
 					<b>File / Folder scan</b>
 					<p>Enter either the path to the fil you wish to scan, or the directory root you wish to scan. If you wish to scan the full filesystem you should indicate the drive letter, such as C:\.</p>
 					<form action="#" id="folder_scan_form">
 						<input type="text" value="C:\" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
 
-						<!-- Js will put the button here -->
 						<div id="scan_button">
-							<button type="submit" class="single_box_button" id="scan_submit_btn">Scan</button>
+							<button type="submit" class="single_box_button scan_control_button" id="scan_submit_btn">Scan</button>
 						</div>
-
-						<p id="folder_scan_stats"></p>
-						<p id="folder_scan_result"></p>
-						<p id="folder_scan_err" class="error_msg"></p>
 					</form>
 				</div>
 
