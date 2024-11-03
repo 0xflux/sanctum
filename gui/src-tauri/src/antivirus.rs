@@ -1,8 +1,9 @@
 //! Antivirus.rs contains all functions associated with the antivirus UI in Tauri.
 //! This module will handle state, requests, async, and events.
 
-use std::sync::Arc;
+use std::{ptr::null_mut, sync::Arc};
 use tauri::{Emitter, State};
+use windows::{core::PWSTR, Win32::System::WindowsProgramming::GetUserNameW};
 use std::path::PathBuf;
 use um_engine::UmEngine;
 
@@ -97,17 +98,30 @@ pub async fn start_quick_scan(
 
 	let engine = Arc::clone(&engine);
 
-    let path: Vec<PathBuf> = vec![
-        PathBuf::from("%AppData%"),
-        PathBuf::from("%LocalAppData%"),
-        PathBuf::from("%ProgramData%"),
+    // get the username of the current logged in user to resolve locations
+    let mut buffer: [u16; 256] = [0; 256];
+    let mut size = buffer.len() as u32;
+
+    let result = unsafe {GetUserNameW(PWSTR(buffer.as_mut_ptr()), &mut size) };
+
+    if let Err(e) = result {
+        panic!("[-] Error getting username: {e}");
+    }
+
+    let username = String::from_utf16_lossy(&buffer[..size as usize -1]);
+
+    let paths: Vec<PathBuf> = vec![
+        PathBuf::from("C:\\ProgramData"),
+        PathBuf::from("C:\\Temp"),
+        PathBuf::from("C:\\temp"),
+        PathBuf::from(format!("C:\\Users\\{}", username)),
     ];
 
 	tokio::spawn(async move {
         // The result is wrapped inside of an enum from the filescanner module, so we need to first match on that
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
-		match engine.scanner_start_scan(path) {
+		match engine.scanner_start_scan(paths) {
             um_engine::State::Finished => {
 
                 let scan_result = engine.scanner_get_scan_data();

@@ -186,7 +186,7 @@ impl FileScanner {
             // otherwise, we will heap allocate 50 mb.
             //
 
-            const MAX_HEAP_SIZE: usize = 5000000; // 50 mb
+            const MAX_HEAP_SIZE: usize = 50000000; // 50 mb
 
             let alloc_size: usize = if let Ok(f) = file.metadata() {
                 let file_size = f.file_size() as usize;
@@ -204,6 +204,8 @@ impl FileScanner {
 
 
             let mut buf = vec![0u8; alloc_size];
+
+            // let mut buf = vec![0u8; alloc_size];
             
             //
             // ingest the file and update hash value per chunk(if chunking)
@@ -213,14 +215,8 @@ impl FileScanner {
                 // This is a sensible place to check whether the user has cancelled the scan, anything before this is likely
                 // too short a time period to have the user stop the scan.
                 //
-                // Putting this in the loop makes sense (in the event of a large file)
-                //
-                {
-                    let lock = self.state.lock().unwrap();
-                    if *lock == State::Cancelled {
-                        // todo update the error type of this fn to something more flexible
-                        return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
-                    }
+                if self.get_state() == State::Cancelled {
+                    return Ok(None);
                 }
 
                 let count = reader.read(&mut buf)?;
@@ -252,25 +248,26 @@ impl FileScanner {
 
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub fn begin_scan(&self, target: Vec<PathBuf>) -> Result<State, io::Error> {
+    pub fn begin_scan(&self, input_dirs: Vec<PathBuf>) -> Result<State, io::Error> {
         
-        let mut discovered_dirs: Vec<PathBuf> = target;
+        let mut discovered_dirs: Vec<PathBuf> = Vec::new();
 
         // If the target is a directory, then add it back to the discovered dirs as that will be iterated
         // separate to the target - target is just used for scanning a single file.
         // This could be refactored at a later date so this check is done more inline below whilst still adhering
         // to how the functionality works.
-        let target = match discovered_dirs.pop() {
-            Some(t) => {
-                if t.is_dir() {
+        let mut target = PathBuf::new();
+        if input_dirs.len() == 1 {
+            target = input_dirs.clone().pop().unwrap();
+        } else {
+            for t in input_dirs {
+                if t.exists() && t.is_dir() {
                     discovered_dirs.push(t.clone());
+                    target = t;
                 }
-                t
-            },
-            None => {
-                return Err(io::Error::new(io::ErrorKind::Uncategorized, "Input was empty."));
-            },
-        };
+            }
+        }
+        
 
         let stop_clock = Arc::new(Mutex::new(false));
         let clock_clone = Arc::clone(&stop_clock);
@@ -308,6 +305,7 @@ impl FileScanner {
             }
         });
         
+        // if the target is a FILE, then scan only the 1 file
         if !target.is_dir() {
             let res = self.scan_file_against_hashes(&target, &files_scanned_for_scanner);
             match res {
@@ -341,8 +339,7 @@ impl FileScanner {
             }
         }
 
-        let mut time_map: BTreeMap<u128, PathBuf> = BTreeMap::new();
-
+        // otherwise, we are a directory so start this off
         while !discovered_dirs.is_empty() {
 
             // pop a directory
@@ -387,7 +384,6 @@ impl FileScanner {
                 //
                 // Check the file against the hashes, we are only interested in positive matches at this stage
                 //
-                let now = Instant::now();
                 match self.scan_file_against_hashes(&path, &files_scanned_for_scanner) {
                     Ok(v) => {
                         if v.is_some() {
@@ -401,17 +397,8 @@ impl FileScanner {
                     },
                     Err(e) => eprintln!("[-] Error scanning: {e}"),
                 }
-
-                let elapsed = now.elapsed().as_millis();
-
-                time_map.insert(elapsed, path);
             }
         }
-
-        let min_val = time_map.iter().next().unwrap();
-        let max_val = time_map.iter().next_back().unwrap();
-
-        println!("[i] Min: {:?}, Max: {:?}", min_val, max_val);
 
         *stop_clock.lock().unwrap() = true;
 
