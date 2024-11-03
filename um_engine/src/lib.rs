@@ -4,10 +4,13 @@ use std::{io, path::PathBuf};
 use driver_manager::SanctumDriverManager;
 use filescanner::{FileScanner, ScanningLiveInfo};
 pub use filescanner::{MatchedIOC, ScanResult, ScanType, State};
+pub use settings::SanctumSettings;
 
 mod driver_manager;
 mod strings;
+mod settings;
 mod filescanner;
+mod utils;
 
 /// The public API for the usermode engine which will run inside the Tauri GUI application.
 /// At present this interface does not hold state, and is used as a singleton in order to instruct the 
@@ -23,12 +26,13 @@ mod filescanner;
 pub struct UmEngine {
     pub driver_manager: SanctumDriverManager,   // the interface for managing the driver
     pub file_scanner: FileScanner,
+    pub sanctum_settings: SanctumSettings,
 }
 
 impl UmEngine {
 
     /// Initialises the usermode engine, ensuring the driver file exists in the image directory.
-    pub fn new() -> Self {
+    pub fn new(sanctum_settings: SanctumSettings) -> Self {
 
         println!("[i] Sanctum usermode engine staring..");
 
@@ -49,6 +53,7 @@ impl UmEngine {
         UmEngine{
             driver_manager,
             file_scanner,
+            sanctum_settings,
         }
     }
 

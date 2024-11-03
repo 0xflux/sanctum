@@ -5,16 +5,18 @@
 #[allow(non_snake_case)]
 
 mod antivirus;
+mod settings;
 
 use std::sync::Arc;
 use antivirus::{check_page_state, get_scan_stats, start_folder_scan, stop_scan, start_quick_scan};
-use um_engine::UmEngine;
+use settings::settings_load_page_state;
+use um_engine::{SanctumSettings, UmEngine};
 
 #[tokio::main]
 async fn main() {
 
 	// the usermode engine will be used as a singleton
-	let um_engine = Arc::new(UmEngine::new());
+	let um_engine = Arc::new(UmEngine::new(SanctumSettings::load()));
 	
 	tauri::Builder::default()
 	.manage(um_engine)
@@ -24,6 +26,7 @@ async fn main() {
 			stop_scan,
 			get_scan_stats,
 			start_quick_scan,
+			settings_load_page_state,
 			])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
