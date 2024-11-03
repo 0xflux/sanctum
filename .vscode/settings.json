@@ -6,6 +6,7 @@
         "Addreg",
         "ASSOCSERVICE",
         "bindgen",
+        "callout",
         "filescanner",
         "genericifies",
         "iocs",
