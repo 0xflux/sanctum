@@ -127,3 +127,31 @@ p.error_msg {
     display: inline;
     width: 12%;
 }
+
+#scan_button_quick {
+    display: inline;
+    width: 12%;
+    float: right;
+}
+
+#scan_button_quick button {
+    width: 100%;
+}
+
+#quick_scan_callout {
+    min-height: 70px;
+}
+
+#quick_scan_callout p {
+    float: left;
+}
+
+#scan_button_full {
+    display: inline;
+}
+
+#cancel_scan_form {
+    float: right;
+    margin-top: -50px;
+    display: inline;
+}

@@ -255,25 +255,23 @@
 				</div>
 				
 				<!-- Main page -->
-				<div class="full_callout">
+				<div id="quick_scan_callout" class="full_callout">
 					<b>Quick scan</b>
-					<p>Scans places commonly abused by malware.</p>
 					<form action="#" id="quick_scan_form">
-						<input type="text" value="C:\" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
-
-						<div id="scan_button">
+						<p>Scans places commonly abused by malware.</p>
+						<div id="scan_button_quick">
 							<button type="submit" class="single_box_button scan_control_button" id="quick_scan_submit">Scan</button>
 						</div>
 					</form>
 				</div>
 
-				<div class="full_callout">
+				<div id="full_scan_callout" class="full_callout">
 					<b>File / Folder scan</b>
 					<p>Enter either the path to the fil you wish to scan, or the directory root you wish to scan. If you wish to scan the full filesystem you should indicate the drive letter, such as C:\.</p>
 					<form action="#" id="folder_scan_form">
 						<input type="text" value="C:\" autocomplete="off" placeholder="Enter folder path" id="folder_path_input" />
 
-						<div id="scan_button">
+						<div id="scan_button_full">
 							<button type="submit" class="single_box_button scan_control_button" id="scan_submit_btn">Scan</button>
 						</div>
 					</form>
