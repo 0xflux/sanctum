@@ -259,14 +259,19 @@ impl FileScanner {
         let mut target = PathBuf::new();
         if input_dirs.len() == 1 {
             target = input_dirs.clone().pop().unwrap();
+            discovered_dirs.push(target.clone());
         } else {
             for t in input_dirs {
-                if t.exists() && t.is_dir() {
-                    discovered_dirs.push(t.clone());
-                    target = t;
+                if t.exists() {
+                    if t.is_dir() {
+                        discovered_dirs.push(t.clone());
+                        target = t;
+                    }
                 }
             }
         }
+        
+        println!("[i sd idoxops {:?}", discovered_dirs);
         
 
         let stop_clock = Arc::new(Mutex::new(false));
