@@ -6,6 +6,71 @@
 	<script src="nav.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
+
+	<script>
+		document.addEventListener("DOMContentLoaded", function() {
+	
+			const { invoke } = window.__TAURI__.core;
+			const { listen } = window.__TAURI__.event;
+	
+			const possibleStates = ['Installed', 'Uninstalled', 'Running', 'Stopped'];
+	
+			const TIMEOUT_WAIT = 20;
+	
+	
+			//
+			// Page initialisation
+			//
+			// invoke('driver_check_state')
+			// 	.then((state) => {
+			// 		if (possibleStates.includes(state)) {
+			// 			console.log(`Starting state: ${state}`);
+			// 			// if (state === 'Scanning') {
+			// 			// 	console.log("Starting state is scanning");
+			// 			// 	write_live_scan_stats("Scanning...");
+			// 			// 	scan_in_progress = true;
+			// 			// } else {
+			// 			// 	console.log("Starting state is NOT scanning");
+			// 			// 	scan_in_progress = false;
+			// 			// }
+			// 			// set_scan_button_state(scan_in_progress);
+			// 		} else {
+			// 			console.error(`Unexpected state received: ${state}`);
+			// 		}
+			// 	})
+			// 	.catch((error) => console.error("Invoke error:", error));
+
+
+			//
+			// Events
+			//
+
+			document.getElementById("install_driver_btn").addEventListener("click", function(event) {
+				event.preventDefault();
+				invoke('driver_install_driver')
+					.then((response) => {
+						console.log("Response: ", response);
+					})
+					.catch((error) => {console.error("Invoke error:", error);});
+			});
+
+			document.getElementById("uninstall_driver_btn").addEventListener("click", function(event) {
+				event.preventDefault();
+				console.log("Uninstall button clicked");
+			});
+
+			document.getElementById("start_driver_btn").addEventListener("click", function(event) {
+				event.preventDefault();
+				console.log("Start button clicked");
+			});
+
+			document.getElementById("stop_driver_btn").addEventListener("click", function(event) {
+				event.preventDefault();
+				console.log("Stop button clicked");
+			});
+		});
+	</script>
+
   </head>
   <body>
     <header id="header"><p>Sanctum Home EDR</p></header>
@@ -17,6 +82,18 @@
 			
 				<h1>Kernel functions</h1>
 				<p>A number of functions which relate to functionality in the kernel.</p>
+
+				<div class="full_callout" id="driver_control_panel">
+					<b>Primary driver controls</b>
+					<p>Use these buttons to control the state of the driver. Current state: </p>
+					<form action="#" id="driver_main_controls">
+						<button type="submit" class="single_box_button scan_control_button" id="install_driver_btn">Install</button>
+						<button type="submit" class="single_box_button scan_control_button" id="uninstall_driver_btn">Uninstall</button>
+						<button type="submit" class="single_box_button scan_control_button" id="start_driver_btn">Start</button>
+						<button type="submit" class="single_box_button scan_control_button" id="stop_driver_btn">Stop</button>
+
+					</form>
+				</div>
 			
 			</article>								
 		</main>
