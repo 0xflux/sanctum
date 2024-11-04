@@ -30,6 +30,13 @@ use windows::{
 
 use crate::strings::ToUnicodeString;
 
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum DriverState {
+    Uninstalled,
+    Started,
+    Stopped,
+}
+
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name
 /// and other critical settings.
@@ -43,6 +50,7 @@ pub struct SanctumDriverManager {
     svc_path: Vec<u16>,
     svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
+    pub state: DriverState,
 }
 
 impl SanctumDriverManager {
@@ -72,11 +80,14 @@ impl SanctumDriverManager {
             svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
+            state: DriverState::Stopped, // todo will need to check if is installed
         };
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)
-        instance.init_handle_via_registry();
+        if instance.init_handle_via_registry() {
+            instance.state = DriverState::Started;
+        }
 
         instance
     }
@@ -88,7 +99,7 @@ impl SanctumDriverManager {
     ///
     /// This function will panic if it was unable to open the service manager or install the driver
     /// in most cases. ERROR_SERVICE_EXISTS, ERROR_DUPLICATE_SERVICE_NAME will not panic.
-    pub fn install_driver(&mut self) {
+    pub fn install_driver(&self) {
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
@@ -283,7 +294,7 @@ impl SanctumDriverManager {
     /// by Rust's RAII Drop trait so no requirement to manually close the handle.
     ///
     /// todo better error handling for this fn.
-    pub fn init_handle_via_registry(&mut self) {
+    pub fn init_handle_via_registry(&mut self) -> bool {
         let filename = PCWSTR::from_raw(self.device_um_symbolic_link_name.as_ptr());
         let handle = unsafe {
             CreateFileW(
@@ -301,8 +312,11 @@ impl SanctumDriverManager {
             Ok(h) => self.handle_via_path.handle = Some(h),
             Err(e) => {
                 eprintln!("[-] Unable to get handle to driver via its registry path, error: {e}");
+                return false;
             }
         }
+
+        true
     }
 
 
@@ -505,6 +519,11 @@ impl SanctumDriverManager {
 
         println!("[+] Response from driver: {}, {:?}", response.received, std::str::from_utf8(constructed));
 
+    }
+
+
+    pub fn get_state(&self) -> DriverState {
+        self.state
     }
 }
 

@@ -61,7 +61,7 @@ pub async fn scanner_start_folder_scan(
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
 		match engine.scanner_start_scan(path) {
-            um_engine::State::Finished => {
+            um_engine::FileScannerState::Finished => {
 
                 let scan_result = engine.scanner_get_scan_data();
 
@@ -71,10 +71,10 @@ pub async fn scanner_start_folder_scan(
                     app_handle.emit("folder_scan_malware_found", &scan_result).unwrap();
                 }
             },
-            um_engine::State::FinishedWithError(v) => {
+            um_engine::FileScannerState::FinishedWithError(v) => {
                 app_handle.emit("folder_scan_error", &v).unwrap();
             },
-            um_engine::State::Scanning => {
+            um_engine::FileScannerState::Scanning => {
                 app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
             },
             _ => (),
@@ -104,7 +104,7 @@ pub async fn scanner_start_quick_scan(
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
 		match engine.scanner_start_scan(paths) {
-            um_engine::State::Finished => {
+            um_engine::FileScannerState::Finished => {
 
                 let scan_result = engine.scanner_get_scan_data();
 
@@ -114,10 +114,10 @@ pub async fn scanner_start_quick_scan(
                     app_handle.emit("folder_scan_malware_found", &scan_result).unwrap();
                 }
             },
-            um_engine::State::FinishedWithError(v) => {
+            um_engine::FileScannerState::FinishedWithError(v) => {
                 app_handle.emit("folder_scan_error", &v).unwrap();
             },
-            um_engine::State::Scanning => {
+            um_engine::FileScannerState::Scanning => {
                 app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
             },
             _ => (),

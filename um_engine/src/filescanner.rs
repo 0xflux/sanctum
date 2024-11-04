@@ -41,7 +41,7 @@ pub struct FileScanner {
     // either locally on disk or in the cloud.
     iocs: BTreeSet<String>,
     // state - The state of the scanner so we can lock it whilst scanning
-    pub state: Arc<Mutex<State>>,
+    pub state: Arc<Mutex<FileScannerState>>,
     pub scanning_info: Arc<Mutex<ScanningLiveInfo>>,
 }
 
@@ -49,7 +49,7 @@ pub struct FileScanner {
 /// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
 /// further information about the live-time information such as how many files have been scanned and time taken so far.
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub enum State {
+pub enum FileScannerState {
     Scanning,
     Finished,
     FinishedWithError(String),
@@ -101,7 +101,7 @@ impl FileScanner {
         Ok(
             FileScanner {
                 iocs: bts,
-                state: Arc::new(Mutex::new(State::Inactive)),
+                state: Arc::new(Mutex::new(FileScannerState::Inactive)),
                 scanning_info: Arc::new(Mutex::new(ScanningLiveInfo::new())),
             }
         )
@@ -113,8 +113,8 @@ impl FileScanner {
         let mut lock = self.state.lock().unwrap();
 
         // check we are scanning, if not return
-        if *lock == State::Scanning {
-            *lock = State::Cancelled; // update state
+        if *lock == FileScannerState::Scanning {
+            *lock = FileScannerState::Cancelled; // update state
             let sli = self.scanning_info.lock().unwrap();
 
             return Some(sli.clone());
@@ -126,7 +126,7 @@ impl FileScanner {
 
     pub fn scan_started(&self) {
         let mut lock = self.state.lock().unwrap();
-        *lock = State::Scanning;
+        *lock = FileScannerState::Scanning;
         // reset the stats
         self.scanning_info.lock().unwrap().reset();
     }
@@ -136,11 +136,11 @@ impl FileScanner {
     pub fn is_scanning(&self) -> bool {
         let lock = self.state.lock().unwrap();
         match *lock {
-            State::Scanning => true,
-            State::Finished => false,
-            State::FinishedWithError(_) => false,
-            State::Inactive => false,
-            State::Cancelled => false,
+            FileScannerState::Scanning => true,
+            FileScannerState::Finished => false,
+            FileScannerState::FinishedWithError(_) => false,
+            FileScannerState::Inactive => false,
+            FileScannerState::Cancelled => false,
         }
     }
 
@@ -154,7 +154,7 @@ impl FileScanner {
     /// Updates the internal is_scanning state to false
     pub fn end_scan(&self) {
         let mut lock = self.state.lock().unwrap();
-        *lock = State::Inactive;
+        *lock = FileScannerState::Inactive;
     }
 
 
@@ -215,7 +215,7 @@ impl FileScanner {
                 // This is a sensible place to check whether the user has cancelled the scan, anything before this is likely
                 // too short a time period to have the user stop the scan.
                 //
-                if self.get_state() == State::Cancelled {
+                if self.get_state() == FileScannerState::Cancelled {
                     return Ok(None);
                 }
 
@@ -248,7 +248,7 @@ impl FileScanner {
 
     /// Public API entry point, scans from a root folder including all children, this can be used on a small 
     /// scale for a folder scan, or used to initiate a system scan.
-    pub fn begin_scan(&self, input_dirs: Vec<PathBuf>) -> Result<State, io::Error> {
+    pub fn begin_scan(&self, input_dirs: Vec<PathBuf>) -> Result<FileScannerState, io::Error> {
         
         let mut discovered_dirs: Vec<PathBuf> = Vec::new();
 
@@ -323,17 +323,17 @@ impl FileScanner {
                         
                         // result will contain the matched IOC
                         *stop_clock.lock().unwrap() = true;
-                        return Ok(State::Finished);
+                        return Ok(FileScannerState::Finished);
                     }
 
-                    return Ok(State::Finished);
+                    return Ok(FileScannerState::Finished);
                 },
                 Err(e) => {
                     *stop_clock.lock().unwrap() = true;
 
                     if e.kind() == io::ErrorKind::Uncategorized {
                         // results will be empty here
-                        return Ok(State::Cancelled);
+                        return Ok(FileScannerState::Cancelled);
                     }
 
                     return Err(e);
@@ -364,7 +364,7 @@ impl FileScanner {
                 // check whether the scan is cancelled
                 {
                     let lock = self.state.lock().unwrap();
-                    if *lock == State::Cancelled {
+                    if *lock == FileScannerState::Cancelled {
                         // todo update the error type of this fn to something more flexible
                         *stop_clock.lock().unwrap() = true;
                         return Err(io::Error::new(io::ErrorKind::Uncategorized, "User cancelled scan."));
@@ -404,12 +404,12 @@ impl FileScanner {
 
         *stop_clock.lock().unwrap() = true;
 
-        Ok(State::Finished)
+        Ok(FileScannerState::Finished)
 
     }
 
 
-    pub fn get_state(&self) -> State {
+    pub fn get_state(&self) -> FileScannerState {
         let lock = self.state.lock().unwrap();
         lock.clone()
     }
