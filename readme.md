@@ -77,4 +77,7 @@ Driver checks compatibility with the client version and will panic (usermode) an
 
 ## Helpful notes:
 
-1) To see driver install config, regedit: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Sanctum
+1) To see driver install config, regedit: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Sanctum.
+2) If you are going to run this, the two paths will need editing in order for it to work:
+   1) pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\AppData\\Roaming\\Sanctum\\sanctum.sys";
+   2) pub static IOC_LIST_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\ioc_list.txt";
