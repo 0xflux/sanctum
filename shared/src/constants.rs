@@ -20,5 +20,5 @@ pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0,
 pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1 }; // 0.0.1 etc
 
 // Usermode specific constants
-pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\target\\debug\\sanctum.sys";
+pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\AppData\\Roaming\\Sanctum\\sanctum.sys";
 pub static IOC_LIST_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\ioc_list.txt";
