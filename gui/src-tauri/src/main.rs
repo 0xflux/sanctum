@@ -10,13 +10,13 @@ mod settings;
 use std::sync::Arc;
 use antivirus::{scanner_check_page_state, scanner_get_scan_stats, scanner_start_folder_scan, scanner_stop_scan, scanner_start_quick_scan};
 use settings::{settings_load_page_state, settings_update_settings};
-use um_engine::{SanctumSettings, UmEngine};
+use um_engine::UmEngine;
 
 #[tokio::main]
 async fn main() {
 
 	// the usermode engine will be used as a singleton
-	let um_engine = Arc::new(UmEngine::new(SanctumSettings::load()));
+	let um_engine = Arc::new(UmEngine::new());
 	
 	tauri::Builder::default()
 	.manage(um_engine)

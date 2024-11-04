@@ -59,6 +59,7 @@ impl SanctumDriverManager {
         let path_as_str = String::from_utf16_lossy(&svc_path);
 
         // check the sys file exists
+        // todo this eventually should be in the actual install directory under Windows
         let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(svc_path.as_ptr())) };
         if x == INVALID_FILE_ATTRIBUTES {
             panic!("[-] Cannot find sys file. Err: {}. Expected at: {}", unsafe {

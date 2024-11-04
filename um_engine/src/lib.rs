@@ -34,13 +34,16 @@ pub struct UmEngine {
 impl UmEngine {
 
     /// Initialises the usermode engine, ensuring the driver file exists in the image directory.
-    pub fn new(sanctum_settings: SanctumSettings) -> Self {
+    pub fn new() -> Self {
 
         println!("[i] Sanctum usermode engine staring..");
 
         //
         // Config setup
         //
+
+         // settings and environment
+         let sanctum_settings = Arc::new(Mutex::new(SanctumSettings::load()));
 
         // driver manager
         let driver_manager: SanctumDriverManager = SanctumDriverManager::new();
@@ -51,9 +54,6 @@ impl UmEngine {
             panic!("[-] Failed to initialise scanner: {e}.");
         }
         let file_scanner = scanner.unwrap();
-
-        // settings
-        let sanctum_settings = Arc::new(Mutex::new(sanctum_settings));
 
         UmEngine{
             driver_manager,
