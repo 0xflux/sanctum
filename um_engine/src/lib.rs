@@ -151,6 +151,12 @@ impl UmEngine {
 
         self.driver_manager.get_state()
     }
+    
+    pub fn driver_uninstall_driver(&self) -> DriverState {
+        self.driver_manager.uninstall_driver();
+
+        self.driver_manager.get_state()
+    }
 
     pub fn driver_get_state(&self) -> DriverState {
         self.driver_manager.get_state()

@@ -1,5 +1,5 @@
 use core::str;
-use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
+use std::{cell::RefCell, ffi::c_void, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
     constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
@@ -33,6 +33,7 @@ use crate::strings::ToUnicodeString;
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DriverState {
     Uninstalled,
+    Installed,
     Started,
     Stopped,
 }
@@ -50,7 +51,7 @@ pub struct SanctumDriverManager {
     svc_path: Vec<u16>,
     svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
-    pub state: DriverState,
+    pub state: RefCell<DriverState>,
 }
 
 impl SanctumDriverManager {
@@ -80,13 +81,13 @@ impl SanctumDriverManager {
             svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
-            state: DriverState::Stopped, // todo will need to check if is installed
+            state: RefCell::new(DriverState::Stopped), // todo will need to check if is installed
         };
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)
         if instance.init_handle_via_registry() {
-            instance.state = DriverState::Started;
+            *instance.state.borrow_mut() = DriverState::Started;
         }
 
         instance
@@ -283,6 +284,10 @@ impl SanctumDriverManager {
             return;
         }
 
+        {
+            *self.state.borrow_mut() = DriverState::Uninstalled;
+        }
+        
         println!("[+] Driver uninstalled successfully.");
     }
 
@@ -523,7 +528,7 @@ impl SanctumDriverManager {
 
 
     pub fn get_state(&self) -> DriverState {
-        self.state
+        *self.state.borrow()
     }
 }
 

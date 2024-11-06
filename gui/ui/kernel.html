@@ -56,7 +56,11 @@
 
 			document.getElementById("uninstall_driver_btn").addEventListener("click", function(event) {
 				event.preventDefault();
-				console.log("Uninstall button clicked");
+				invoke('driver_uninstall_driver')
+					.then((response) => {
+						console.log("Response from uninstall: ", response);
+					})
+					.catch((error) => {console.error("Invoke error:", error);});
 			});
 
 			document.getElementById("start_driver_btn").addEventListener("click", function(event) {
