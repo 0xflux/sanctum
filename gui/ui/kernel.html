@@ -49,7 +49,7 @@
 				event.preventDefault();
 				invoke('driver_install_driver')
 					.then((response) => {
-						console.log("Response: ", response);
+						document.getElementById("driver_state_msg").textContent = response
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
@@ -58,7 +58,7 @@
 				event.preventDefault();
 				invoke('driver_uninstall_driver')
 					.then((response) => {
-						console.log("Response from uninstall: ", response);
+						document.getElementById("driver_state_msg").textContent = response
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
@@ -67,6 +67,7 @@
 				event.preventDefault();
 				invoke('driver_start_driver')
 					.then((response) => {
+						document.getElementById("driver_state_msg").textContent = response
 						console.log("Response from start: ", response);
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
@@ -74,6 +75,8 @@
 
 			document.getElementById("stop_driver_btn").addEventListener("click", function(event) {
 				event.preventDefault();
+
+				// document.getElementById("driver_state_msg").textContent = response
 				console.log("Stop button clicked");
 			});
 		});
@@ -93,7 +96,7 @@
 
 				<div class="full_callout" id="driver_control_panel">
 					<b>Primary driver controls</b>
-					<p>Use these buttons to control the state of the driver. Current state: </p>
+					<p>Use these buttons to control the state of the driver. Current state: <span id="driver_state_msg">Loading...</span></p>
 					<form action="#" id="driver_main_controls">
 						<button type="submit" class="single_box_button scan_control_button" id="install_driver_btn">Install</button>
 						<button type="submit" class="single_box_button scan_control_button" id="uninstall_driver_btn">Uninstall</button>
