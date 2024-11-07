@@ -164,6 +164,12 @@ impl UmEngine {
         lock.get_state()
     }
 
+    pub fn driver_stop_driver(&self) -> DriverState {
+        let mut lock = self.driver_manager.lock().unwrap();
+        lock.stop_driver();
+        lock.get_state()
+    }
+
     pub fn driver_get_state(&self) -> DriverState {
         let lock = self.driver_manager.lock().unwrap();
         lock.get_state()

@@ -203,10 +203,6 @@ impl SanctumDriverManager {
     /// Function will panic if it cannot open a handle to the SC Manager
     pub fn start_driver(&mut self) {
 
-        let msg = format!("Test message.");
-        self.update_state_msg(msg);
-        return;
-
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
@@ -294,6 +290,8 @@ impl SanctumDriverManager {
         // todo - possible bug here, making the handle None if there was an error
         // maybe some form of IOCTL conversation to make sure unload is unloading..?
         self.handle_via_path = DriverHandleRaii::default(); // drop will be invoked closing the handle
+
+        self.state = DriverState::Stopped("".to_string());
 
         println!("[+] Driver stopped successfully.");
     }

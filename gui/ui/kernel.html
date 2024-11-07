@@ -74,9 +74,11 @@
 
 			document.getElementById("stop_driver_btn").addEventListener("click", function(event) {
 				event.preventDefault();
-
-				// document.getElementById("driver_state_msg").textContent = response
-				console.log("Stop button clicked");
+				invoke('driver_stop_driver')
+					.then((response) => {
+						print_driver_state(response)
+					})
+					.catch((error) => {console.error("Invoke error:", error);});
 			});
 
 

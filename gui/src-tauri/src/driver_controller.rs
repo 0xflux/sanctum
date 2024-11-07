@@ -47,3 +47,16 @@ pub async fn driver_start_driver(
         
     Ok(state_string)
 }
+
+
+#[tauri::command]
+pub async fn driver_stop_driver(
+    engine: State<'_, Arc<UmEngine>>,
+) -> Result<String, ()> {
+
+    let state = engine.driver_stop_driver();
+
+    let state_string = serde_json::to_string(&state).unwrap();
+        
+    Ok(state_string)
+}
