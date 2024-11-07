@@ -5,7 +5,7 @@ pub use driver_manager::DriverState;
 pub use filescanner::{MatchedIOC, ScanResult, ScanType};
 pub use settings::SanctumSettings;
 
-use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{cell::RefCell, fs, path::PathBuf, sync::{Arc, Mutex}};
 use driver_manager::SanctumDriverManager;
 use filescanner::{FileScanner, ScanningLiveInfo};
 use settings::get_setting_paths;
@@ -29,7 +29,7 @@ mod utils;
 /// - scanner_ => Any functionality for file scanning etc shall be prefixed with scanner_
 /// - driver_ => Any functionality for driver interaction shall be prefixed with driver_
 pub struct UmEngine {
-    pub driver_manager: SanctumDriverManager,   // the interface for managing the driver
+    pub driver_manager: Arc<Mutex<SanctumDriverManager>>,   // the interface for managing the driver
     pub file_scanner: FileScanner,
     pub sanctum_settings: Arc<Mutex<SanctumSettings>>,
 }
@@ -49,7 +49,7 @@ impl UmEngine {
          let sanctum_settings = Arc::new(Mutex::new(SanctumSettings::load()));
 
         // driver manager
-        let driver_manager: SanctumDriverManager = SanctumDriverManager::new();
+        let driver_manager = Arc::new(Mutex::new(SanctumDriverManager::new()));
 
         // scanner module
         let scanner = FileScanner::new();
@@ -147,19 +147,26 @@ impl UmEngine {
     /// 
     /// The state of the driver after initialisation
     pub fn driver_install_driver(&self) -> DriverState {
-        self.driver_manager.install_driver();
-
-        self.driver_manager.get_state()
+        let lock = self.driver_manager.lock().unwrap();
+        lock.install_driver();
+        lock.get_state()
     }
     
     pub fn driver_uninstall_driver(&self) -> DriverState {
-        self.driver_manager.uninstall_driver();
+        let mut lock = self.driver_manager.lock().unwrap();
+        lock.uninstall_driver();
+        lock.get_state()
+    }
 
-        self.driver_manager.get_state()
+    pub fn driver_start_driver(&self) -> DriverState {
+        let mut lock = self.driver_manager.lock().unwrap();
+        lock.start_driver();
+        lock.get_state()
     }
 
     pub fn driver_get_state(&self) -> DriverState {
-        self.driver_manager.get_state()
+        let lock = self.driver_manager.lock().unwrap();
+        lock.get_state()
     }
 }
 

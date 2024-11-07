@@ -10,7 +10,7 @@ mod driver_controller;
 
 use std::sync::Arc;
 use antivirus::{scanner_check_page_state, scanner_get_scan_stats, scanner_start_folder_scan, scanner_stop_scan, scanner_start_quick_scan};
-use driver_controller::{driver_install_driver, driver_uninstall_driver};
+use driver_controller::{driver_install_driver, driver_start_driver, driver_uninstall_driver};
 use settings::{settings_load_page_state, settings_update_settings};
 use um_engine::UmEngine;
 
@@ -32,6 +32,7 @@ async fn main() {
 			settings_update_settings,
 			driver_install_driver,
 			driver_uninstall_driver,
+			driver_start_driver,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

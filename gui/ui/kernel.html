@@ -65,7 +65,11 @@
 
 			document.getElementById("start_driver_btn").addEventListener("click", function(event) {
 				event.preventDefault();
-				console.log("Start button clicked");
+				invoke('driver_start_driver')
+					.then((response) => {
+						console.log("Response from start: ", response);
+					})
+					.catch((error) => {console.error("Invoke error:", error);});
 			});
 
 			document.getElementById("stop_driver_btn").addEventListener("click", function(event) {

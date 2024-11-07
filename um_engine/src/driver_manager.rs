@@ -51,7 +51,7 @@ pub struct SanctumDriverManager {
     svc_path: Vec<u16>,
     svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
-    pub state: RefCell<DriverState>,
+    pub state: DriverState,
 }
 
 impl SanctumDriverManager {
@@ -81,13 +81,13 @@ impl SanctumDriverManager {
             svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
-            state: RefCell::new(DriverState::Stopped), // todo will need to check if is installed
+            state: DriverState::Stopped, // todo will need to check if is installed
         };
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)
         if instance.init_handle_via_registry() {
-            *instance.state.borrow_mut() = DriverState::Started;
+            instance.state = DriverState::Started;
         }
 
         instance
@@ -264,7 +264,7 @@ impl SanctumDriverManager {
     /// # Panics
     ///
     /// Function will panic if it cannot open a handle to the SC Manager
-    pub fn uninstall_driver(&self) {
+    pub fn uninstall_driver(&mut self) {
         let mut sc_mgr = ServiceControlManager::new();
         sc_mgr.open_service_manager_w(SC_MANAGER_ALL_ACCESS);
 
@@ -284,9 +284,7 @@ impl SanctumDriverManager {
             return;
         }
 
-        {
-            *self.state.borrow_mut() = DriverState::Uninstalled;
-        }
+        self.state = DriverState::Uninstalled;
         
         println!("[+] Driver uninstalled successfully.");
     }
@@ -528,7 +526,7 @@ impl SanctumDriverManager {
 
 
     pub fn get_state(&self) -> DriverState {
-        *self.state.borrow()
+        self.state
     }
 }
 
