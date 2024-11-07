@@ -30,12 +30,13 @@ use windows::{
 
 use crate::strings::ToUnicodeString;
 
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DriverState {
     Uninstalled,
     Installed,
     Started,
     Stopped,
+    ErrorStopped(String), // for when the driver is in state stopped, but it received an error
 }
 
 /// The SanctumDriverManager holds key information to be shared between
@@ -189,6 +190,8 @@ impl SanctumDriverManager {
             eprintln!(
                 "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
             );
+            let msg = format!("Failed to get handle to the Sanctum service when attempting to start it {}.", e);
+            self.state = DriverState::ErrorStopped(msg);
             return;
         }
 
@@ -198,6 +201,9 @@ impl SanctumDriverManager {
                     "[-] Failed to start service. {e}. Handle: {:?}.",
                     sc_mgr.mgr_handle.unwrap()
                 );
+                
+                let msg = format!("Failed to start service. {e}.");
+                self.state = DriverState::ErrorStopped(msg);
                 return;
             };
         };
@@ -208,10 +214,12 @@ impl SanctumDriverManager {
         // check the driver version is compatible with the engine
         if self.ioctl_check_driver_compatibility() == false {
             self.stop_driver(); // ensure a clean shutdown
-            // todo replace panic once GUI in
-            panic!("[-] Driver and client version incompatible. Please ensure you are running the latest version.");
+            let msg = format!("Driver and client version incompatible. Please ensure you are running the latest version.");
+            self.state = DriverState::ErrorStopped(msg);
+            return;
         }
 
+        self.state = DriverState::Started;
         println!("[+] Driver started successfully.");
     }
 
@@ -526,7 +534,7 @@ impl SanctumDriverManager {
 
 
     pub fn get_state(&self) -> DriverState {
-        self.state
+        self.state.clone()
     }
 }
 

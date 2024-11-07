@@ -22,7 +22,7 @@ mod utils;
 /// engine to conduct actions on behalf of the user.
 /// 
 /// This interface also blocks, and is not async yet but the plan will be either to make it async or
-/// run certain functions in their own threads. 
+/// run certain functions in their own threads.
 /// 
 /// # API naming conventions
 /// 
