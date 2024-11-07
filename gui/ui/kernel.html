@@ -49,7 +49,7 @@
 				event.preventDefault();
 				invoke('driver_install_driver')
 					.then((response) => {
-						document.getElementById("driver_state_msg").textContent = response
+						print_driver_state(response)
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
@@ -58,7 +58,7 @@
 				event.preventDefault();
 				invoke('driver_uninstall_driver')
 					.then((response) => {
-						document.getElementById("driver_state_msg").textContent = response
+						print_driver_state(response)
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
@@ -67,8 +67,7 @@
 				event.preventDefault();
 				invoke('driver_start_driver')
 					.then((response) => {
-						document.getElementById("driver_state_msg").textContent = response
-						console.log("Response from start: ", response);
+						print_driver_state(response)
 					})
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
@@ -79,6 +78,24 @@
 				// document.getElementById("driver_state_msg").textContent = response
 				console.log("Stop button clicked");
 			});
+
+
+			//
+			// Functions
+			//
+			function print_driver_state(response) {
+				console.log("Hello? ", response)
+				const j = JSON.parse(response);
+				const [key, value] = Object.entries(j)[0];
+
+				document.getElementById("driver_state_msg").innerText = key;
+
+				if (value) {
+					document.getElementById("driver_state_with_err").innerText = value;
+				} else {
+					document.getElementById("driver_state_with_err").innerText = "";
+				}
+			}
 		});
 	</script>
 
@@ -96,7 +113,7 @@
 
 				<div class="full_callout" id="driver_control_panel">
 					<b>Primary driver controls</b>
-					<p>Use these buttons to control the state of the driver. Current state: <span id="driver_state_msg">Loading...</span></p>
+					<p>Use these buttons to control the state of the driver. Current state: <span id="driver_state_msg">Loading...</span><span id="driver_state_with_err" class="error_msg"></span></p>
 					<form action="#" id="driver_main_controls">
 						<button type="submit" class="single_box_button scan_control_button" id="install_driver_btn">Install</button>
 						<button type="submit" class="single_box_button scan_control_button" id="uninstall_driver_btn">Uninstall</button>

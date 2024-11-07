@@ -119,7 +119,7 @@ div.full_callout button.single_box_button {
     width: 12%;
 }
 
-p.error_msg {
+p.error_msg, span.error_msg {
     color: crimson;
 }
 

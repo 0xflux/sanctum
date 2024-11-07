@@ -147,7 +147,7 @@ impl UmEngine {
     /// 
     /// The state of the driver after initialisation
     pub fn driver_install_driver(&self) -> DriverState {
-        let lock = self.driver_manager.lock().unwrap();
+        let mut lock = self.driver_manager.lock().unwrap();
         lock.install_driver();
         lock.get_state()
     }

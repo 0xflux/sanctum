@@ -1,5 +1,5 @@
 use core::str;
-use std::{cell::RefCell, ffi::c_void, ptr::null_mut, slice::from_raw_parts};
+use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
     constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
@@ -32,11 +32,10 @@ use crate::strings::ToUnicodeString;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DriverState {
-    Uninstalled,
-    Installed,
-    Started,
-    Stopped,
-    ErrorStopped(String), // for when the driver is in state stopped, but it received an error
+    Uninstalled(String),
+    Installed(String),
+    Started(String),
+    Stopped(String),
 }
 
 /// The SanctumDriverManager holds key information to be shared between
@@ -82,13 +81,13 @@ impl SanctumDriverManager {
             svc_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
-            state: DriverState::Stopped, // todo will need to check if is installed
+            state: DriverState::Uninstalled("".to_string()), // todo will need to check if is installed
         };
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)
         if instance.init_handle_via_registry() {
-            instance.state = DriverState::Started;
+            instance.state = DriverState::Started("".to_string());
         }
 
         instance
@@ -101,7 +100,7 @@ impl SanctumDriverManager {
     ///
     /// This function will panic if it was unable to open the service manager or install the driver
     /// in most cases. ERROR_SERVICE_EXISTS, ERROR_DUPLICATE_SERVICE_NAME will not panic.
-    pub fn install_driver(&self) {
+    pub fn install_driver(&mut self) {
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
@@ -129,7 +128,8 @@ impl SanctumDriverManager {
             ) {
                 Ok(h) => {
                     if h.is_invalid() {
-                        panic!("[-] Handle returned is invalid when attempting to install the service. Last error: {:?}", GetLastError());
+                        let msg = format!("[-] Handle returned is invalid when attempting to install the service. Error code: {:?}", GetLastError());
+                        self.update_state_msg(msg);
                     }
 
                     h
@@ -139,21 +139,25 @@ impl SanctumDriverManager {
 
                     match le {
                         ERROR_DUPLICATE_SERVICE_NAME => {
-                            eprintln!(
+                            let msg = format!(
                                 "[-] Unable to create service, duplicate service name found."
                             );
+                            self.update_state_msg(msg);
                             return;
                         }
                         ERROR_SERVICE_EXISTS => {
-                            eprintln!("[-] Unable to create service, service already exists.");
+                            let msg = format!("[-] Unable to create service, service already exists.");
+                            self.update_state_msg(msg);
                             return;
                         }
                         _ => {
                             // anything else
-                            panic!(
+                            let msg = format!(
                                 "[-] Unable to create service. Error: {e}. Svc path: {}",
                                 String::from_utf16_lossy(self.svc_path.as_slice())
                             );
+                            self.update_state_msg(msg);
+                            return;
                         }
                     } // close match last err
                 }
@@ -161,6 +165,7 @@ impl SanctumDriverManager {
         };
 
         println!("[+] Driver successfully installed.");
+        self.state = DriverState::Installed("".to_string());
 
         //
         // At this point, we should have the handle, and we can close it.
@@ -173,12 +178,35 @@ impl SanctumDriverManager {
         }
     }
 
+
+    /// Updates the state in place without modifying the actual state of the driver, but allows for passing
+    /// an error string back to the GUI, this way, if the driver manager encounters an error, but this error
+    /// doesn't change the state of the driver, we can communicate this to the user without altering the state.
+    /// 
+    /// Only use this in cases where the state doesn't change to something new, but you wish to emit a string. Usually an
+    /// error message.
+    fn update_state_msg(&mut self, new_message: String) {
+        match self.state {
+            DriverState::Uninstalled(ref mut msg) |
+            DriverState::Installed(ref mut msg) |
+            DriverState::Started(ref mut msg) |
+            DriverState::Stopped(ref mut msg) => {
+                *msg = new_message;
+            }
+        };
+    }
+
     /// Start the driver.
     ///
     /// # Panics
     ///
     /// Function will panic if it cannot open a handle to the SC Manager
     pub fn start_driver(&mut self) {
+
+        let msg = format!("Test message.");
+        self.update_state_msg(msg);
+        return;
+
         //
         // Create a new ScDbMgr to hold the handle of the result of the OpenSCManagerW call.
         //
@@ -191,7 +219,7 @@ impl SanctumDriverManager {
                 "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
             );
             let msg = format!("Failed to get handle to the Sanctum service when attempting to start it {}.", e);
-            self.state = DriverState::ErrorStopped(msg);
+            self.state = DriverState::Stopped(msg);
             return;
         }
 
@@ -203,7 +231,7 @@ impl SanctumDriverManager {
                 );
                 
                 let msg = format!("Failed to start service. {e}.");
-                self.state = DriverState::ErrorStopped(msg);
+                self.state = DriverState::Stopped(msg);
                 return;
             };
         };
@@ -215,11 +243,11 @@ impl SanctumDriverManager {
         if self.ioctl_check_driver_compatibility() == false {
             self.stop_driver(); // ensure a clean shutdown
             let msg = format!("Driver and client version incompatible. Please ensure you are running the latest version.");
-            self.state = DriverState::ErrorStopped(msg);
+            self.state = DriverState::Stopped(msg);
             return;
         }
 
-        self.state = DriverState::Started;
+        self.state = DriverState::Started("".to_string());
         println!("[+] Driver started successfully.");
     }
 
@@ -238,6 +266,8 @@ impl SanctumDriverManager {
             eprintln!(
                 "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
             );
+            let msg = format!("Failed to get handle to the Sanctum service when attempting to start it. {e}");
+            self.update_state_msg(msg);
             return;
         }
 
@@ -255,6 +285,8 @@ impl SanctumDriverManager {
                 "[-] Failed to stop the service, {e}. Handle: {:?}",
                 sc_mgr.mgr_handle.unwrap()
             );
+            let msg = format!("Failed to stop the service, {e}");
+            self.update_state_msg(msg);
             return;
         }
 
@@ -279,8 +311,10 @@ impl SanctumDriverManager {
         // get a handle to sanctum service
         if let Err(e) = sc_mgr.get_handle_to_sanctum_svc(self) {
             eprintln!(
-                "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
+                "[-] Failed to get handle to the Sanctum service. {e}"
             );
+            let msg = format!("Failed to get handle to the Sanctum service. {e}");
+            self.update_state_msg(msg);
             return;
         }
 
@@ -289,10 +323,12 @@ impl SanctumDriverManager {
                 "[-] Failed to uninstall the driver: {e}. Handle: {:?}",
                 sc_mgr.mgr_handle.unwrap()
             );
+            let msg = format!("Failed to uninstall the driver: {e}");
+            self.update_state_msg(msg);
             return;
         }
 
-        self.state = DriverState::Uninstalled;
+        self.state = DriverState::Uninstalled("".to_string());
         
         println!("[+] Driver uninstalled successfully.");
     }
