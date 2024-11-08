@@ -4,6 +4,7 @@
 
     "cSpell.words": [
         "Addreg",
+        "appdata",
         "ASSOCSERVICE",
         "bindgen",
         "callout",
@@ -32,6 +33,7 @@
         "Raii",
         "regedit",
         "repr",
+        "reqwest",
         "rustc",
         "SANC",
         "SPSVCINST",

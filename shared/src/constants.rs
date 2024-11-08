@@ -33,5 +33,5 @@ impl<'a> Display for SanctumVersion<'a> {
 //
 // Usermode specific constants
 //
-pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\AppData\\Roaming\\Sanctum\\sanctum.sys";
-pub static IOC_LIST_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\ioc_list.txt";
+pub static SANC_SYS_FILE_LOCATION: &str = "Sanctum\\sanctum.sys";
+pub static IOC_LIST_LOCATION: &str = "Sanctum\\ioc_list.txt";

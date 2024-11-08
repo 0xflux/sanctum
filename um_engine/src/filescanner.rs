@@ -3,7 +3,7 @@
 //! This module provides functionality for scanning files and retrieving relevant
 //! information about a file that the EDR may want to use in decision making. 
 
-use std::{collections::{BTreeMap, BTreeSet}, fs::{self, File}, io::{self, BufRead, BufReader, Read}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
+use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read, Write}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 
 use md5::{Digest, Md5};
 // use sha2::{Sha256, Digest};
@@ -85,13 +85,33 @@ impl ScanningLiveInfo {
 
 impl FileScanner {
     /// Construct a new instance of the FileScanner with no parameters.
-    pub fn new() -> Result<Self, std::io::Error> {
+    pub async fn new() -> Result<Self, std::io::Error> {
 
         //
         // ingest latest IOC hash list
         //
         let mut bts: BTreeSet<String> = BTreeSet::new();
-        let file = File::open(IOC_LIST_LOCATION)?;
+        let mut ioc_location: String = std::env::var("APPDATA")
+            .expect("[-] Could not find App Data folder in environment variables.]");
+        ioc_location.push_str(format!("\\{}", IOC_LIST_LOCATION).as_str());
+
+        let file = match File::open(&ioc_location) {
+            Ok(f) => f,
+            Err(e) => {
+                println!("[-] IOC list not found, downloading to {}.", ioc_location);
+                if e.kind() == io::ErrorKind::NotFound {
+                    let file_data = reqwest::get("https://raw.githubusercontent.com/0xflux/Sanctum/refs/heads/main/ioc_list.txt")
+                        .await.unwrap()
+                        .text().await.unwrap();
+                    let mut f = File::create_new(&ioc_location).expect(format!("[-] Could not create new file for IOCs. Loc: {}", ioc_location).as_str());
+                    f.write_all(file_data.as_bytes()).expect("[-] Could not write data for IOCs");
+                    
+                    f
+                } else {
+                    panic!("[-] Unknown error occurred when trying to ingest IOC files. {e}");
+                }
+            },
+        };
         let lines = BufReader::new(file).lines();
 
         for line in lines.flatten() {

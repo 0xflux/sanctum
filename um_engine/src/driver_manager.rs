@@ -1,5 +1,5 @@
 use core::str;
-use std::{ffi::c_void, ptr::null_mut, slice::from_raw_parts};
+use std::{ffi::c_void, os::windows::ffi::OsStrExt, path::PathBuf, ptr::null_mut, slice::from_raw_parts};
 
 use shared::{
     constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
@@ -60,29 +60,31 @@ impl SanctumDriverManager {
         //
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
-        // let device_name_path = DEVICE_NAME_PATH.to_u16_vec();
         let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
 
-        let svc_path = SANC_SYS_FILE_LOCATION.to_u16_vec();
+        let appdata = std::env::var("APPDATA").expect("[-] Could not find App Data folder in environment variables.]");
+        let sys_file_path: Vec<u16> = PathBuf::from(appdata).join(SANC_SYS_FILE_LOCATION).as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+
         let svc_name = SVC_NAME.to_u16_vec();
-        let path_as_str = String::from_utf16_lossy(&svc_path);
 
         // check the sys file exists
         // todo this eventually should be in the actual install directory under Windows
-        let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(svc_path.as_ptr())) };
+        let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(sys_file_path.as_ptr())) };
         if x == INVALID_FILE_ATTRIBUTES {
-            panic!("[-] Cannot find sys file. Err: {}. Expected at: {}", unsafe {
+            panic!("[-] Cannot find sanctum.sys. Err: {}. Ensure the driver file is at: {:?}", unsafe {
                 GetLastError().0
-            }, path_as_str);
+            }, sys_file_path);
         }
 
         let mut instance = SanctumDriverManager {
             device_um_symbolic_link_name,
-            svc_path,
+            svc_path: sys_file_path,
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // set to None
             state: DriverState::Uninstalled("".to_string()), // todo will need to check if is installed
         };
+
+        println!("[+] Sys file found ok");
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)

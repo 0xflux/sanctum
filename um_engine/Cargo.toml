@@ -18,6 +18,7 @@ serde = { version = "1.0.213", features = ["derive"] }
 serde_json = "1.0"
 tokio = {version="1.29.1", features = ["full"] }
 md-5 = "0.11.0-pre.4"
+reqwest = {version = "0.12.9", features = []}
 
 [lib]
 name = "um_engine"

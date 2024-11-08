@@ -18,7 +18,7 @@ use um_engine::UmEngine;
 async fn main() {
 
 	// the usermode engine will be used as a singleton
-	let um_engine = Arc::new(UmEngine::new());
+	let um_engine = Arc::new(UmEngine::new().await);
 	
 	tauri::Builder::default()
 	.manage(um_engine)

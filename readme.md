@@ -78,8 +78,4 @@ Driver checks compatibility with the client version and will panic (usermode) an
 ## Helpful notes:
 
 1) To see driver install config, regedit: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Sanctum.
-2) If you are going to run this, the two paths will need editing in order for it to work (or for ease add a symlink for flux=your user):
-   1) Symlink option (in an elevated terminal): `New-Item -ItemType SymbolicLink -Path "C:\Users\flux" -Target "$Env:UserProfile"`
-   2) Non-symlink option:
-      1) pub static SANC_SYS_FILE_LOCATION: &str = "C:\\Users\\flux\\AppData\\Roaming\\Sanctum\\sanctum.sys";
-      2) pub static IOC_LIST_LOCATION: &str = "C:\\Users\\flux\\git\\sanctum\\ioc_list.txt";
+2) The app will create a location in %AppData% where the IOC file and settings are created. You will also need to drop the built driver into this location. A built driver is not shipped with this repo, so it must be built after cloned with cargo make from the driver directory.
