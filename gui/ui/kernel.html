@@ -93,7 +93,7 @@
 				document.getElementById("driver_state_msg").innerText = key;
 
 				if (value) {
-					document.getElementById("driver_state_with_err").innerText = value;
+					document.getElementById("driver_state_with_err").innerText = "An error occurred: " + value;
 				} else {
 					document.getElementById("driver_state_with_err").innerText = "";
 				}
@@ -115,7 +115,7 @@
 
 				<div class="full_callout" id="driver_control_panel">
 					<b>Primary driver controls</b>
-					<p>Use these buttons to control the state of the driver. Current state: <span id="driver_state_msg">Loading...</span><span id="driver_state_with_err" class="error_msg"></span></p>
+					<p>Use these buttons to control the state of the driver. Current state: <span id="driver_state_msg">Loading...</span> <span id="driver_state_with_err" class="error_msg"></span></p>
 					<form action="#" id="driver_main_controls">
 						<button type="submit" class="single_box_button scan_control_button" id="install_driver_btn">Install</button>
 						<button type="submit" class="single_box_button scan_control_button" id="uninstall_driver_btn">Uninstall</button>
