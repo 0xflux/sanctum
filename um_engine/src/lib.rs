@@ -52,9 +52,7 @@ impl UmEngine {
         let driver_manager = Arc::new(Mutex::new(SanctumDriverManager::new()));
 
         // scanner module
-        println!("calling new");
         let scanner = FileScanner::new().await;
-        println!("finished calling new");
         if let Err(e) = scanner {
             panic!("[-] Failed to initialise scanner: {e}.");
         }
