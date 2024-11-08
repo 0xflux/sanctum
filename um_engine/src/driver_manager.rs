@@ -128,7 +128,7 @@ impl SanctumDriverManager {
             ) {
                 Ok(h) => {
                     if h.is_invalid() {
-                        let msg = format!("[-] Handle returned is invalid when attempting to install the service. Error code: {:?}", GetLastError());
+                        let msg = format!("Handle returned is invalid when attempting to install the service. Error code: {:?}", GetLastError());
                         self.update_state_msg(msg);
                     }
 
@@ -140,20 +140,20 @@ impl SanctumDriverManager {
                     match le {
                         ERROR_DUPLICATE_SERVICE_NAME => {
                             let msg = format!(
-                                "[-] Unable to create service, duplicate service name found."
+                                "Unable to create service, duplicate service name found."
                             );
                             self.update_state_msg(msg);
                             return;
                         }
                         ERROR_SERVICE_EXISTS => {
-                            let msg = format!("[-] Unable to create service, service already exists.");
+                            let msg = format!("Unable to create service, service already exists.");
                             self.update_state_msg(msg);
                             return;
                         }
                         _ => {
                             // anything else
                             let msg = format!(
-                                "[-] Unable to create service. Error: {e}. Svc path: {}",
+                                "Unable to create service. Error: {e}. Svc path: {}",
                                 String::from_utf16_lossy(self.svc_path.as_slice())
                             );
                             self.update_state_msg(msg);

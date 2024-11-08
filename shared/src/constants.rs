@@ -21,8 +21,8 @@ pub struct SanctumVersion<'a> {
 }
 
 pub static RELEASE_NAME: &str = "Sanctify";
-pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1, name: "Light’s Resolve" };
-pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1, name: "Light’s Resolve"};
+pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1, name: "Light's Resolve" };
+pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 1, name: "Light's Resolve"};
 
 impl<'a> Display for SanctumVersion<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
