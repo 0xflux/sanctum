@@ -4,38 +4,23 @@ use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
 
 pub trait ToUnicodeString {
-    fn to_u16_vec(&self) -> Vec<u16>;
+    fn to_unicode_string(&self) -> Option<UNICODE_STRING>;
 }
 
-impl ToUnicodeString for &str {
-    fn to_u16_vec(&self) -> Vec<u16> {
-        // reserve space for null terminator
-        let mut buf = Vec::with_capacity(self.len() + 1);
-
-        // iterate over each char and push the UTF-16 to the buf
-        for c in self.chars() {
-            let mut c_buf = [0; 2];
-            let encoded = c.encode_utf16(&mut c_buf);
-            buf.extend_from_slice(encoded);
-        }
-
-        buf.push(0); // add null terminator
-        buf
-    }
-}
-
-pub trait ToWindowsUnicodeString {
-    fn to_windows_unicode_string(&self) -> Option<UNICODE_STRING>;
-}
-
-impl ToWindowsUnicodeString for Vec<u16> {
-    fn to_windows_unicode_string(&self) -> Option<UNICODE_STRING> {
+impl ToUnicodeString for Vec<u16> {
+    fn to_unicode_string(&self) -> Option<UNICODE_STRING> {
         create_unicode_string(self)
     }
 }
 
-/// Creates a Windows API compatible
-/// unicode string from a u16 slice.
+impl ToUnicodeString for &str {
+    fn to_unicode_string(&self) -> Option<UNICODE_STRING> {
+        let v = self.to_u16_vec();
+        create_unicode_string(&v)
+    }
+}
+
+/// Creates a Windows API compatible unicode string from a u16 slice.
 ///
 ///
 /// <h1>Returns</h1>
@@ -76,6 +61,28 @@ pub fn create_unicode_string(s: &Vec<u16>) -> Option<UNICODE_STRING> {
         MaximumLength: (len * 2) as u16,
         Buffer: s.as_ptr() as *mut u16,
     })
+}
+
+
+pub trait ToU16Vec {
+    fn to_u16_vec(&self) -> Vec<u16>;
+}
+
+impl ToU16Vec for &str {
+    fn to_u16_vec(&self) -> Vec<u16> {
+        // reserve space for null terminator
+        let mut buf = Vec::with_capacity(self.len() + 1);
+
+        // iterate over each char and push the UTF-16 to the buf
+        for c in self.chars() {
+            let mut c_buf = [0; 2];
+            let encoded = c.encode_utf16(&mut c_buf);
+            buf.extend_from_slice(encoded);
+        }
+
+        buf.push(0); // add null terminator
+        buf
+    }
 }
 
 
@@ -124,6 +131,7 @@ pub fn unicode_to_str(input: *const UNICODE_STRING) -> Option<String> {
     //
     // Convert the unicode string to an ANSI string, then we will construct a normal String from raw parts - this may be extra conversion than 
     // converting the unicode string from raw parts without the above step. Doing so was resulting in bsod, trying to diagnose.
+    // todo
     //
     let res = unsafe {
         RtlUnicodeStringToAnsiString(&mut s, input, FALSE as u8)

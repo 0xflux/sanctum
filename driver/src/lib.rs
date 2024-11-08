@@ -15,8 +15,8 @@ use ::core::ptr::null_mut;
 
 use ffi::IoGetCurrentIrpStackLocation;
 use ioctls::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
-use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
-use utils::{ToUnicodeString, ToWindowsUnicodeString};
+use shared::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
+use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
 #[cfg(not(test))]
 use wdk_alloc::WdkAllocator;
@@ -41,7 +41,7 @@ pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
-    println!("[sanctum] [i] Starting Sanctum driver...");
+    println!("[sanctum] [i] Starting Sanctum driver... Version: {}", VERSION_DRIVER);
 
     let status = configure_driver(driver, registry_path as *mut _);
 
@@ -61,13 +61,11 @@ pub unsafe extern "C" fn configure_driver(
     // Configure the strings
     //
     let mut dos_name = DOS_DEVICE_NAME
-        .to_u16_vec()
-        .to_windows_unicode_string()
+        .to_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
 
     let mut nt_name = NT_DEVICE_NAME
-        .to_u16_vec()
-        .to_windows_unicode_string()
+        .to_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
 
 
@@ -144,7 +142,7 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
     // rm symbolic link
     let mut device_name = DOS_DEVICE_NAME
         .to_u16_vec()
-        .to_windows_unicode_string()
+        .to_unicode_string()
         .expect("[sanctum] [-] unable to encode string to unicode.");
     let _ = unsafe { IoDeleteSymbolicLink(&mut device_name) };
 
