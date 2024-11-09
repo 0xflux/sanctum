@@ -1,5 +1,5 @@
 use alloc::{string::{String, ToString}, vec::Vec};
-use shared::constants::SanctumVersion;
+use shared_no_std::constants::SanctumVersion;
 use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
 

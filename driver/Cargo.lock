@@ -498,9 +498,9 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 
 [[package]]
 name = "sanctum"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
- "shared",
+ "shared_no_std",
  "wdk",
  "wdk-alloc",
  "wdk-build",
@@ -559,8 +559,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared"
-version = "0.1.0"
+name = "shared_no_std"
+version = "0.0.2"
 
 [[package]]
 name = "shlex"

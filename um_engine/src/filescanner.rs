@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader
 
 use md5::{Digest, Md5};
 // use sha2::{Sha256, Digest};
-use shared::constants::IOC_LIST_LOCATION;
+use shared_no_std::constants::IOC_LIST_LOCATION;
 use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]

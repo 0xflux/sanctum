@@ -64,10 +64,11 @@ checksum = "c042108f3ed77fd83760a5fd79b53be043192bb3b9dba91d8c574c0ada7850c8"
 
 [[package]]
 name = "app"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "serde",
  "serde_json",
+ "shared_std",
  "tauri",
  "tauri-build",
  "tokio",
@@ -3106,8 +3107,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared"
-version = "0.1.0"
+name = "shared_no_std"
+version = "0.0.2"
+
+[[package]]
+name = "shared_std"
+version = "0.0.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "shlex"
@@ -3879,13 +3888,14 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "um_engine"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "md-5",
  "reqwest",
  "serde",
  "serde_json",
- "shared",
+ "shared_no_std",
+ "shared_std",
  "tokio",
  "windows",
 ]

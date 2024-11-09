@@ -1,6 +1,6 @@
 use core::{ffi::c_void, ptr::null_mut};
 
-use shared::{constants::SanctumVersion, ioctl::SancIoctlPing};
+use shared_no_std::{constants::SanctumVersion, ioctl::SancIoctlPing};
 use wdk::println;
 use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, IO_STACK_LOCATION, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
 

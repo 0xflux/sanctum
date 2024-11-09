@@ -1,7 +1,7 @@
 use core::str;
 use std::{ffi::c_void, os::windows::ffi::OsStrExt, path::PathBuf, ptr::null_mut, slice::from_raw_parts};
 
-use shared::{
+use shared_no_std::{
     constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
     ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
@@ -84,7 +84,8 @@ impl SanctumDriverManager {
             state: DriverState::Uninstalled("".to_string()), // todo will need to check if is installed
         };
 
-        println!("[+] Sys file found ok");
+        // attempt an install of the driver
+        instance.install_driver();
 
         // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
         // where the driver is not yet installed (or has been uninstalled)
@@ -148,8 +149,7 @@ impl SanctumDriverManager {
                             return;
                         }
                         ERROR_SERVICE_EXISTS => {
-                            let msg = format!("Unable to create service, service already exists.");
-                            self.update_state_msg(msg);
+                            self.state = DriverState::Installed("".to_string());
                             return;
                         }
                         _ => {

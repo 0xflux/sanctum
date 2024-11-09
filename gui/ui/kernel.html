@@ -21,24 +21,12 @@
 			//
 			// Page initialisation
 			//
-			// invoke('driver_check_state')
-			// 	.then((state) => {
-			// 		if (possibleStates.includes(state)) {
-			// 			console.log(`Starting state: ${state}`);
-			// 			// if (state === 'Scanning') {
-			// 			// 	console.log("Starting state is scanning");
-			// 			// 	write_live_scan_stats("Scanning...");
-			// 			// 	scan_in_progress = true;
-			// 			// } else {
-			// 			// 	console.log("Starting state is NOT scanning");
-			// 			// 	scan_in_progress = false;
-			// 			// }
-			// 			// set_scan_button_state(scan_in_progress);
-			// 		} else {
-			// 			console.error(`Unexpected state received: ${state}`);
-			// 		}
-			// 	})
-			// 	.catch((error) => console.error("Invoke error:", error));
+			invoke('driver_check_state')
+				.then((state) => {
+					console.log("Checking state... ", state);
+					print_driver_state(state)
+				})
+				.catch((error) => console.error("Invoke error:", error));
 
 
 			//

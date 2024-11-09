@@ -1,6 +1,6 @@
 [package]
 name = "sanctum"
-version = "0.1.0"
+version = "0.0.2"
 edition = "2021"
 build = "build.rs"
 
@@ -21,7 +21,7 @@ wdk-alloc = "0.3.0"
 wdk-sys = "0.3.0"
 wdk-build = "0.3.0"
 wdk-panic = "0.3.0"
-shared = { path = "../shared", default-features = false }
+shared_no_std = { path = "../shared_no_std", default-features = false }
 
 [profile.dev]
 panic = "abort"

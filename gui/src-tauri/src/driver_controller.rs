@@ -60,3 +60,15 @@ pub async fn driver_stop_driver(
         
     Ok(state_string)
 }
+
+
+#[tauri::command]
+pub async fn driver_check_state(
+    engine: State<'_, Arc<UmEngine>>,
+) -> Result<String, ()> {
+    let state = engine.driver_get_state();
+
+    let state_string = serde_json::to_string(&state).unwrap();
+        
+    Ok(state_string)
+}

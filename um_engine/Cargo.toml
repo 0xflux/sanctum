@@ -1,6 +1,6 @@
 [package]
 name = "um_engine"
-version = "0.1.0"
+version = "0.0.2"
 edition = "2021"
 
 [dependencies]
@@ -13,7 +13,8 @@ windows = {version = "0.58.0", features = [
     "Win32_System_LibraryLoader",
     "Win32_System_WindowsProgramming",
 ]}
-shared = { path = "../shared" }
+shared_no_std = { path = "../shared_no_std" }
+shared_std = { path = "../shared_std" }
 serde = { version = "1.0.213", features = ["derive"] }
 serde_json = "1.0"
 tokio = {version="1.29.1", features = ["full"] }
@@ -23,3 +24,7 @@ reqwest = {version = "0.12.9", features = []}
 [lib]
 name = "um_engine"
 path = "src/lib.rs"
+
+[[bin]]
+name = "um_engine_bin"
+path = "src/main.rs"
