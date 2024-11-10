@@ -2,9 +2,12 @@
 //! This module will handle state, requests, async, and events.
 
 use std::sync::Arc;
+use shared_std::ipc::CommandResponse;
 use tauri::{Emitter, State};
 use std::path::PathBuf;
 use um_engine::UmEngine;
+
+use crate::ipc::IpcClient;
 
 #[tauri::command]
 pub fn scanner_check_page_state(
@@ -21,9 +24,16 @@ pub fn scanner_check_page_state(
 
 /// Reports the scan statistics back to the UI 
 #[tauri::command]
-pub fn scanner_get_scan_stats(
+pub async fn scanner_get_scan_stats(
     engine: State<'_, Arc<UmEngine>>,
 ) -> Result<String, ()> {
+
+    // TEST IMPLEMENTATION OF IPC AS GENERIC
+    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
+    match ipc.send_ipc::<CommandResponse>("install_driver").await {
+        Ok(response) => println!("IPC response: {:?}", response),
+        Err(e) => eprintln!("[-] Error with IPC: {e}"),
+    }
 
     let engine = Arc::clone(&engine);
 
