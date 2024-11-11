@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-use serde::de::DeserializeOwned;
-use serde_json::to_vec;
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{to_value, to_vec};
 use shared_std::ipc::{CommandRequest, PIPE_NAME};
 use tokio::{io::{self, AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{ClientOptions, NamedPipeClient}};
 
@@ -34,13 +34,21 @@ impl IpcClient {
     /// - Ok T: where T is the return type of the function run by the usermode engine.
     /// - Err: where the error relates to the reading / writing of the IPC, and NOT the function run
     /// by the IPC server. 
-    pub async fn send_ipc<T>(&mut self, command: &str) -> io::Result<T> 
+    pub async fn send_ipc<T, A>(&mut self, command: &str, args: Option<A>) -> io::Result<T> 
     where 
-        T: DeserializeOwned + Debug
+        T: DeserializeOwned + Debug,
+        A: Serialize
     {
+
+        // where there are args, serialise, otherwise, set to none
+        let args = match args {
+            Some(a) => Some(to_value(a).unwrap()),
+            None => None,
+        };
 
         let message = CommandRequest {
             command: command.to_string(),
+            args,
         };
 
         let message_data = to_vec(&message)?;

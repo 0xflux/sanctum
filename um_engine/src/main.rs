@@ -3,12 +3,13 @@
 pub use filescanner::FileScannerState;
 pub use driver_manager::DriverState;
 pub use filescanner::{MatchedIOC, ScanResult, ScanType};
-use serde_json::{from_slice, to_vec};
+use serde::Serialize;
+use serde_json::{from_slice, to_value, to_vec, Value};
 pub use settings::SanctumSettings;
 use shared_std::ipc::{CommandRequest, CommandResponse, PIPE_NAME};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
 
-use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{any::Any, fs, path::PathBuf, sync::{Arc, Mutex}};
 use driver_manager::SanctumDriverManager;
 use filescanner::{FileScanner, ScanningLiveInfo};
 use settings::get_setting_paths;
@@ -34,6 +35,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("[+] Named pipe listening on {}", PIPE_NAME);
 
+    // set up the engine
+
+    let engine = Arc::new(UmEngine::new().await);
+
     // IPC input loop
     loop {
         server.connect().await?;
@@ -41,6 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut client = server;
         server = ServerOptions::new().create(PIPE_NAME)?;
+
+        let engine_clone = Arc::clone(&engine);
 
         tokio::spawn(async move {
             let mut buffer = vec![0; 1024];
@@ -59,15 +66,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             //
                             // Handle the incoming IPC request here
                             //
-                            let response = match request.command.as_str() {
-                                "install_driver" => CommandResponse {
-                                    status: "success".to_string(),
-                                    message: "Driver installed".to_string(),
+                            let response: Value = match request.command.as_str() {
+                                "scanner_check_page_state" => {
+                                    to_value(engine_clone.scanner_get_state()).unwrap()
                                 },
-                                _ => CommandResponse {
+                                "scanner_get_scan_stats" => {
+                                    to_value(engine_clone.scanner_get_scan_data()).unwrap()
+                                },
+                                "scanner_cancel_scan" => {
+                                    engine_clone.scanner_cancel_scan();
+                                    to_value("").unwrap()
+                                },
+                                "scanner_start_folder_scan" => {
+                                    if let Some(args) = request.args {
+                                        let target: Vec<PathBuf> = serde_json::from_value(args).unwrap();
+                                        to_value(engine_clone.scanner_start_scan(target)).unwrap()
+                                    } else {
+                                        to_value(CommandResponse {
+                                            status: "error".to_string(),
+                                            message: "No path passed to scanner".to_string(),
+                                        }).unwrap()
+                                    }
+                                },
+                                _ => to_value(CommandResponse {
                                     status: "error".to_string(),
                                     message: "Unknown command".to_string(),
-                                },
+                                }).unwrap(),
                             };
 
                             //

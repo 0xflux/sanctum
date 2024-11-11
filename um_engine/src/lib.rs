@@ -4,10 +4,11 @@ pub use filescanner::FileScannerState;
 pub use driver_manager::DriverState;
 pub use filescanner::{MatchedIOC, ScanResult, ScanType};
 pub use settings::SanctumSettings;
+pub use filescanner::ScanningLiveInfo;
 
-use std::{cell::RefCell, fs, path::PathBuf, sync::{Arc, Mutex}};
+use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
 use driver_manager::SanctumDriverManager;
-use filescanner::{FileScanner, ScanningLiveInfo};
+use filescanner::FileScanner;
 use settings::get_setting_paths;
 use utils::get_logged_in_username;
 
