@@ -27,6 +27,28 @@ impl IpcClient {
     /// requires a turbofish generic which will be whatever the function on the other side of the IPC
     /// (aka the usermode EDR engine) returns.
     /// 
+    /// This contains the command in question as a String, and 'args' which is a generic JSON serialised "Value"
+    /// from Serde which allows the struct to contain any number of arguments, serialised to / from a struct that 
+    /// is appropriate for the calling / receiving functions.
+    /// 
+    /// # Sending function
+    /// 
+    /// The sending function must encode data like so:
+    /// 
+    /// ## No data to send:
+    /// 
+    /// ```
+    /// // where IPC is of type IpcClient as implemented in the GUI.
+    /// ipc.send_ipc::<(), Option<Value>>("scanner_cancel_scan", None).await
+    /// ```
+    /// 
+    /// ## Data of type A to send:
+    /// 
+    /// ```
+    /// let path = to_value(vec![PathBuf::from(file_path)]).unwrap();
+    /// ipc.send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(path)).await
+    /// ```
+    /// 
     /// # Returns
     /// 
     /// This function will return:
