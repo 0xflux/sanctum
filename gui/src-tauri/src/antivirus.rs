@@ -16,10 +16,8 @@ pub async fn scanner_check_page_state(
 
     // let engine = Arc::clone(&engine);
 
-    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
-    match ipc.send_ipc::<FileScannerState, Option<Value>>("scanner_check_page_state", None).await {
+    match IpcClient::send_ipc::<FileScannerState, Option<Value>>("scanner_check_page_state", None).await {
         Ok(response) => {
-            println!("[i] Page state response: {:?}", response);
             return Ok(format!("{:?}", response));
         },
         Err(e) => {
@@ -37,10 +35,8 @@ pub async fn scanner_get_scan_stats(
     _engine: State<'_, Arc<UmEngine>>,
 ) -> Result<String, ()> {
 
-    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
-    match ipc.send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await {
+    match IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await {
         Ok(response) => {
-            println!("[i] Get scan stats response: {:?}", response);
             return Ok(format!("{:?}", response));
         },
         Err(e) => {
@@ -58,11 +54,8 @@ pub async fn scanner_stop_scan(
     _engine: State<'_, Arc<UmEngine>>,
 ) -> Result<(), ()> {  
 
-    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
-    match ipc.send_ipc::<(), Option<Value>>("scanner_cancel_scan", None).await {
-        Ok(response) => {
-            println!("[i] stop scan response: {:?}", response);
-        },
+    match IpcClient::send_ipc::<(), Option<Value>>("scanner_cancel_scan", None).await {
+        Ok(_) => (),
         Err(e) => {
             eprintln!("[-] Error with IPC for stop scan: {e}");
         },
@@ -82,20 +75,17 @@ pub async fn scanner_start_folder_scan(
 	// let engine = Arc::clone(&engine);
     let path = to_value(vec![PathBuf::from(file_path)]).unwrap();
 
-    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
-
 	tokio::spawn(async move {
         // The result is wrapped inside of an enum from the filescanner module, so we need to first match on that
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
 
-        match ipc.send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(path)).await {
+        match IpcClient::send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(path)).await {
             Ok(response) => {
-                println!("[i] Folder scanner response: {:?}", response);
                 match response {
                     um_engine::FileScannerState::Finished => {
         
-                        let scan_result = ipc.send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
+                        let scan_result = IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
         
                         if scan_result.scan_results.is_empty() {
                             app_handle.emit("folder_scan_no_results", "No malicious files found.").unwrap();
@@ -128,27 +118,22 @@ pub async fn scanner_start_folder_scan(
 
 #[tauri::command]
 pub async fn scanner_start_quick_scan(
-    engine: State<'_, Arc<UmEngine>>,
+    _engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
 
-	// let engine = Arc::clone(&engine);
+	tokio::spawn(async move {   
+        let paths = IpcClient::send_ipc::<Vec<PathBuf>, Option<Value>>("settings_get_common_scan_areas", None).await.unwrap();
 
-    // todo next refactor this to IPC
-    let paths = engine.settings_get_common_scan_areas();
-    let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
-
-	tokio::spawn(async move {
         // The result is wrapped inside of an enum from the filescanner module, so we need to first match on that
         // as DirectoryResult (since we are scanning a dir). The result should never be anything else for this scan
         // so if it is something has gone wrong with the internal wiring.
-		match ipc.send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(paths)).await {
+		match IpcClient::send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(paths)).await {
             Ok(response) => {
-                println!("[i] Folder scanner response: {:?}", response);
                 match response {
                     um_engine::FileScannerState::Finished => {
         
-                        let scan_result = ipc.send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
+                        let scan_result = IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
         
                         if scan_result.scan_results.is_empty() {
                             app_handle.emit("folder_scan_no_results", "No malicious files found.").unwrap();

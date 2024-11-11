@@ -63,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // deserialise the request
                     match from_slice::<CommandRequest>(&buffer[..bytes_read]) {
                         Ok(request) => {
+                            println!("Request: {:?}", request);
                             //
                             // Handle the incoming IPC request here
                             //
@@ -78,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     to_value("").unwrap()
                                 },
                                 "scanner_start_folder_scan" => {
+                                    println!("[i[ Received start folder scan, args: {:?}", request.args);
                                     if let Some(args) = request.args {
                                         let target: Vec<PathBuf> = serde_json::from_value(args).unwrap();
                                         to_value(engine_clone.scanner_start_scan(target)).unwrap()
@@ -88,6 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         }).unwrap()
                                     }
                                 },
+                                "settings_get_common_scan_areas" => {
+                                    to_value(engine_clone.settings_get_common_scan_areas()).unwrap()
+                                }
                                 _ => to_value(CommandResponse {
                                     status: "error".to_string(),
                                     message: "Unknown command".to_string(),
