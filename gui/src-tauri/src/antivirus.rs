@@ -37,7 +37,8 @@ pub async fn scanner_get_scan_stats(
 
     match IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await {
         Ok(response) => {
-            return Ok(format!("{:?}", response));
+            let response = serde_json::to_string(&response).unwrap();
+            return Ok(response);
         },
         Err(e) => {
             eprintln!("[-] Error with IPC: {e}");
