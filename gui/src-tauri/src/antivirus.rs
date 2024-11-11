@@ -49,10 +49,6 @@ pub async fn scanner_get_scan_stats(
         },
     };
 
-    // let engine = Arc::clone(&engine);
-
-    // let data = serde_json::to_string(&engine.scanner_get_scan_data()).unwrap_or(String::new());
-    // Ok(data)
 }
 
 
@@ -71,9 +67,6 @@ pub async fn scanner_stop_scan(
             eprintln!("[-] Error with IPC for stop scan: {e}");
         },
     };
-
-    // let engine = Arc::clone(&engine);
-    // engine.scanner_cancel_scan();
 
     Ok(())
 }
@@ -141,6 +134,7 @@ pub async fn scanner_start_quick_scan(
 
 	// let engine = Arc::clone(&engine);
 
+    // todo next refactor this to IPC
     let paths = engine.settings_get_common_scan_areas();
     let mut ipc = IpcClient::new().expect("[-] Unable to start IPC client");
 
