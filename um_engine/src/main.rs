@@ -1,112 +1,28 @@
 #![feature(io_error_uncategorized)]
 
-use serde_json::{from_slice, to_value, to_vec, Value};
-use shared_std::ipc::{CommandRequest, CommandResponse, PIPE_NAME};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
+use ipc_handler::UmIpc;
 use um_engine::UmEngine;
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 mod driver_manager;
 mod strings;
 mod settings;
 mod filescanner;
 mod utils;
+mod ipc_handler;
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
-    println!("[i] Trying to start IPC server at {}...", PIPE_NAME);
-
-    // set up IPC
-    let mut server = ServerOptions::new()
-        .first_pipe_instance(true)
-        .pipe_mode(PipeMode::Message)
-        .create(PIPE_NAME)?;
-
-    println!("[+] Named pipe listening on {}", PIPE_NAME);
 
     // set up the engine
-
     let engine = Arc::new(UmEngine::new().await);
 
+    // listen and deal with IPC requests
+    UmIpc::listen(engine).await?;
+
+    Ok(())
+
     // IPC input loop
-    loop {
-        server.connect().await?;
-
-        let mut client = server;
-        server = ServerOptions::new().create(PIPE_NAME)?;
-
-        let engine_clone = Arc::clone(&engine);
-
-        tokio::spawn(async move {
-            let mut buffer = vec![0; 1024];
-
-            // read the request
-            match client.read(&mut buffer).await {
-                Ok(bytes_read) => {
-                    if bytes_read == 0 {
-                        println!("[i] Client disconnected.");
-                        return;
-                    }
-
-                    // deserialise the request
-                    match from_slice::<CommandRequest>(&buffer[..bytes_read]) {
-                        Ok(request) => {
-                            //
-                            // Handle the incoming IPC request here
-                            //
-                            let response: Value = match request.command.as_str() {
-                                "scanner_check_page_state" => {
-                                    to_value(engine_clone.scanner_get_state()).unwrap()
-                                },
-                                "scanner_get_scan_stats" => {
-                                    to_value(engine_clone.scanner_get_scan_data()).unwrap()
-                                },
-                                "scanner_cancel_scan" => {
-                                    engine_clone.scanner_cancel_scan();
-                                    to_value("").unwrap()
-                                },
-                                "scanner_start_folder_scan" => {
-                                    if let Some(args) = request.args {
-                                        let target: Vec<PathBuf> = serde_json::from_value(args).unwrap();
-                                        to_value(engine_clone.scanner_start_scan(target)).unwrap()
-                                    } else {
-                                        to_value(CommandResponse {
-                                            status: "error".to_string(),
-                                            message: "No path passed to scanner".to_string(),
-                                        }).unwrap()
-                                    }
-                                },
-                                "settings_get_common_scan_areas" => {
-                                    to_value(engine_clone.settings_get_common_scan_areas()).unwrap()
-                                }
-                                _ => to_value(CommandResponse {
-                                    status: "error".to_string(),
-                                    message: "Unknown command".to_string(),
-                                }).unwrap(),
-                            };
-
-                            //
-                            // Serialise and send the response back to the client
-                            //
-                            match to_vec(&response) {
-                                Ok(response_bytes) => {
-                                    if let Err(e) = client.write_all(&response_bytes).await {
-                                        eprintln!("[-] Failed to send response to client via pipe: {}", e);
-                                    }
-                                },
-                                // err serialising to vec
-                                Err(e) => eprintln!("[-] Failed to serialise response: {}", e),
-                            };
-                        },
-                        // err serialising into CommandRequest
-                        Err(e) => eprintln!("Failed to deserialise request: {}", e),
-                    }
-                },
-                // err reading IPC
-                Err(e) => eprintln!("Failed to read from client: {}", e),
-            }
-        });
-    }
+    
 }
