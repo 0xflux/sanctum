@@ -14,8 +14,6 @@ pub async fn scanner_check_page_state(
     _engine: State<'_, Arc<UmEngine>>,
 ) -> Result<String, ()> {
 
-    // let engine = Arc::clone(&engine);
-
     match IpcClient::send_ipc::<FileScannerState, Option<Value>>("scanner_check_page_state", None).await {
         Ok(response) => {
             return Ok(format!("{:?}", response));
@@ -31,9 +29,7 @@ pub async fn scanner_check_page_state(
 
 /// Reports the scan statistics back to the UI 
 #[tauri::command]
-pub async fn scanner_get_scan_stats(
-    _engine: State<'_, Arc<UmEngine>>,
-) -> Result<String, ()> {
+pub async fn scanner_get_scan_stats() -> Result<String, ()> {
 
     match IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await {
         Ok(response) => {
@@ -51,9 +47,7 @@ pub async fn scanner_get_scan_stats(
 
 
 #[tauri::command]
-pub async fn scanner_stop_scan(
-    _engine: State<'_, Arc<UmEngine>>,
-) -> Result<(), ()> {  
+pub async fn scanner_stop_scan() -> Result<(), ()> {  
 
     match IpcClient::send_ipc::<(), Option<Value>>("scanner_cancel_scan", None).await {
         Ok(_) => (),
@@ -69,11 +63,9 @@ pub async fn scanner_stop_scan(
 #[tauri::command]
 pub async fn scanner_start_folder_scan(
     file_path: String,
-    _engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
 
-	// let engine = Arc::clone(&engine);
     let path = to_value(vec![PathBuf::from(file_path)]).unwrap();
 
 	tokio::spawn(async move {
@@ -119,7 +111,6 @@ pub async fn scanner_start_folder_scan(
 
 #[tauri::command]
 pub async fn scanner_start_quick_scan(
-    _engine: State<'_, Arc<UmEngine>>,
 	app_handle: tauri::AppHandle,
 ) -> Result<String, ()> {
 
