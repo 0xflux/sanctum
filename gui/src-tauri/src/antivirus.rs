@@ -1,18 +1,15 @@
 //! Antivirus.rs contains all functions associated with the antivirus UI in Tauri.
 //! This module will handle state, requests, async, and events.
 
-use std::sync::Arc;
 use serde_json::{to_value, Value};
-use tauri::{Emitter, State};
+use tauri::Emitter;
 use std::path::PathBuf;
-use um_engine::{FileScannerState, ScanningLiveInfo, UmEngine};
+use um_engine::{FileScannerState, ScanningLiveInfo};
 
 use crate::ipc::IpcClient;
 
 #[tauri::command]
-pub async fn scanner_check_page_state(
-    _engine: State<'_, Arc<UmEngine>>,
-) -> Result<String, ()> {
+pub async fn scanner_check_page_state() -> Result<String, ()> {
 
     match IpcClient::send_ipc::<FileScannerState, Option<Value>>("scanner_check_page_state", None).await {
         Ok(response) => {
