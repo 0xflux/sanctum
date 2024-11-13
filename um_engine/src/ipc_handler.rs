@@ -81,6 +81,11 @@ impl UmIpc {
 /// DLL's)
 pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value {
     let response: Value = match request.command.as_str() {
+
+        //
+        // Scanner IPC requests
+        //
+
         "scanner_check_page_state" => {
             to_value(engine_clone.scanner_get_state()).unwrap()
         },
@@ -105,6 +110,31 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
         "settings_get_common_scan_areas" => {
             to_value(engine_clone.settings_get_common_scan_areas()).unwrap()
         }
+
+
+        //
+        // Driver control from GUI
+        //
+        "driver_install_driver" => {
+            to_value(engine_clone.driver_install_driver()).unwrap()
+        },
+        "driver_uninstall_driver" => {
+            to_value(engine_clone.driver_uninstall_driver()).unwrap()
+        },
+        "driver_start_driver" => {
+            to_value(engine_clone.driver_start_driver()).unwrap()
+        },
+        "driver_stop_driver" => {
+            to_value(engine_clone.driver_stop_driver()).unwrap()
+        },
+        "driver_get_state" => {
+            to_value(engine_clone.driver_get_state()).unwrap()
+        },
+
+
+        //
+        // Unhandled requests
+        //
         _ => to_value(CommandResponse {
             status: "error".to_string(),
             message: "Unknown command".to_string(),
