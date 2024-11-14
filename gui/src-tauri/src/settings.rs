@@ -1,37 +1,39 @@
-use tauri::State;
-use um_engine::{SanctumSettings, UmEngine};
-use std::sync::Arc;
+use serde_json::Value;
+use um_engine::SanctumSettings;
+
+use crate::ipc::IpcClient;
 
 #[tauri::command]
-pub fn settings_load_page_state(
-    engine: State<'_, Arc<UmEngine>>,
-) -> Result<String, ()> {
+pub async fn settings_load_page_state() -> Result<String, ()> {
 
-    let engine = Arc::clone(&engine);
-
-    // get the settings
-    let settings_string = serde_json::to_string(&engine.sanctum_settings).unwrap();
-
-    Ok(settings_string)
+    match IpcClient::send_ipc::<SanctumSettings, Option<Value>>("settings_load_page_state", None).await {
+        Ok(response) => {
+            return Ok(
+                serde_json::to_string(&response).unwrap()
+            )
+        },
+        Err(e) => {
+            eprintln!("[-] Error with IPC: {e}");
+            return Ok("IPC error".to_string()); // todo proper error handling
+        },
+    };
 }
 
 
 #[tauri::command]
-pub fn settings_update_settings(
-    settings: String,
-    engine: State<'_, Arc<UmEngine>>,
-) -> Result<String, ()> {
-
-    let engine = Arc::clone(&engine);
+pub async fn settings_update_settings(settings: String) -> Result<String, ()> {
 
     let settings: SanctumSettings = serde_json::from_str(&settings).unwrap();
 
-    println!("Received settings: {:?}", settings);
-
-    engine.settings_update_settings(settings);
-
-    // get the settings
-    let settings_string = serde_json::to_string(&engine.sanctum_settings).unwrap();
-
-    Ok(settings_string)
+    match IpcClient::send_ipc::<String, _>("settings_update_settings", Some(settings)).await {
+        Ok(response) => {
+            return Ok(
+                serde_json::to_string(&response).unwrap()
+            )
+        },
+        Err(e) => {
+            eprintln!("[-] Error with IPC: {e}");
+            return Ok("IPC error".to_string()); // todo proper error handling
+        },
+    };
 }

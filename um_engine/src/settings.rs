@@ -39,6 +39,20 @@ impl SanctumSettings {
 
         settings
     }
+
+
+    /// Update the settings fields in place
+    pub fn update_settings(&mut self, settings: SanctumSettings) -> Self{
+        // update self fields in memory
+        self.common_scan_areas = settings.clone().common_scan_areas;
+
+        // write new file to disk
+        let settings_str = serde_json::to_string(&settings).unwrap();
+        let path = get_setting_paths(&get_logged_in_username().unwrap()).1;
+        fs::write(path, settings_str).unwrap();
+
+        self.clone()
+    }
 }
 
  /// Get the base path and file name of the settings file, from the AppData folder.

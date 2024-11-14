@@ -1,9 +1,10 @@
 #![feature(io_error_uncategorized)]
 
 use ipc_handler::UmIpc;
-use um_engine::UmEngine;
+use engine::UmEngine;
 use std::sync::Arc;
 
+mod engine;
 mod driver_manager;
 mod strings;
 mod settings;

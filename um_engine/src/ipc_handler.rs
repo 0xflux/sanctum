@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use serde_json::{from_slice, to_value, to_vec, Value};
 use shared_std::ipc::{CommandRequest, CommandResponse, PIPE_NAME};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
-use um_engine::UmEngine;
+use crate::{engine::UmEngine, settings::SanctumSettings};
 
 /// An interface for the usermode IPC server
 pub struct UmIpc{}
@@ -110,6 +110,27 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
         "settings_get_common_scan_areas" => {
             to_value(engine_clone.settings_get_common_scan_areas()).unwrap()
         }
+
+
+        //
+        // Settings control page
+        //
+        "settings_load_page_state" => {
+            let res = engine_clone.sanctum_settings.lock().unwrap().clone();
+            to_value(res).unwrap()
+        },
+        "settings_update_settings" => {
+            if let Some(args) = request.args {
+                let settings: SanctumSettings = serde_json::from_value(args).unwrap();
+                engine_clone.sanctum_settings.lock().unwrap().update_settings(settings);
+                to_value("").unwrap()
+            } else {
+                to_value(CommandResponse {
+                    status: "error".to_string(),
+                    message: "No path passed to scanner".to_string(),
+                }).unwrap()
+            }
+        },
 
 
         //
