@@ -175,6 +175,15 @@ impl UmEngine {
         let lock = self.driver_manager.lock().unwrap();
         lock.get_state()
     }
+
+
+    //
+    // IOCTLS
+    //
+    pub fn ioctl_ping_driver(&self) -> String {
+        let mut lock = self.driver_manager.lock().unwrap();
+        lock.ioctl_ping_driver()
+    }
 }
 
 

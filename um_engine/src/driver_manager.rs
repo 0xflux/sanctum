@@ -432,7 +432,7 @@ impl SanctumDriverManager {
     }
 
     /// Ping the driver from usermode
-    pub fn ioctl_ping_driver(&mut self) {
+    pub fn ioctl_ping_driver(&mut self) -> String {
         //
         // Check the handle to the driver is valid, if not, attempt to initialise it.
         //
@@ -446,7 +446,7 @@ impl SanctumDriverManager {
                     Unable to pass IOCTL. Handle: {:?}", 
                     self.handle_via_path.handle
                 );
-                return;
+                return "".to_string();
             }
         }
 
@@ -483,19 +483,18 @@ impl SanctumDriverManager {
         if let Err(e) = result {
             eprintln!("Error from attempting IOCTL call. {e}");
             // no cleanup required, no additional handles or heap objects
-            return;
+            return "".to_string();
         }
 
         println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
 
         // parse out the result
         if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-            println!(
-                "[+] Bytes returned: {bytes_returned} response: {:#?}",
-                response
-            );
+            println!("[+] IOCTL - Bytes returned: {bytes_returned} response: {:#?}", response);
+            return response.to_string();
         } else {
             println!("[-] Error parsing response as UTF-8");
+            return "".to_string();
         }
     }
 

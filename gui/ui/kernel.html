@@ -69,12 +69,20 @@
 					.catch((error) => {console.error("Invoke error:", error);});
 			});
 
+			document.getElementById("ping_driver").addEventListener("click", function(event) {
+				event.preventDefault();
+				invoke('ioctl_ping_driver')
+					.then((response) => {
+						document.getElementById("ioctl_response").innerText = response;
+					})
+					.catch((error) => {console.error("Invoke error:", error);});
+			});
+
 
 			//
 			// Functions
 			//
 			function print_driver_state(response) {
-				console.log("Hello? ", response)
 				const j = JSON.parse(response);
 				const [key, value] = Object.entries(j)[0];
 
@@ -115,9 +123,9 @@
 				<div class="full_callout" id="ioctl_control_panel">
 					<b>Driver communication</b>
 					<p>Use these options to communicate with the driver whilst it's in development, these will become automated functions in time.</p>
-					<p class="ioctl_response"></p>
+					<p id="ioctl_response"></p>
 					<form action="#" id="ioctl_main_controls">
-						<button type="submit" class="single_box_button scan_control_button" id="ping_driver">Install</button>
+						<button type="submit" class="single_box_button scan_control_button" id="ping_driver">Ping driver</button>
 					</form>
 				</div>
 			

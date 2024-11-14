@@ -10,7 +10,7 @@ mod driver_controller;
 mod ipc;
 
 use antivirus::{scanner_check_page_state, scanner_get_scan_stats, scanner_start_folder_scan, scanner_stop_scan, scanner_start_quick_scan};
-use driver_controller::{driver_check_state, driver_install_driver, driver_start_driver, driver_stop_driver, driver_uninstall_driver};
+use driver_controller::{driver_check_state, driver_install_driver, driver_start_driver, driver_stop_driver, driver_uninstall_driver, ioctl_ping_driver};
 use settings::{settings_load_page_state, settings_update_settings};
 
 #[tokio::main]
@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 				driver_start_driver,
 				driver_stop_driver,
 				driver_check_state,
+				ioctl_ping_driver
 			])
 			.run(tauri::generate_context!())
 			.expect("error while running tauri application")

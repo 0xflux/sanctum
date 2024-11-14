@@ -92,3 +92,17 @@ pub async fn driver_check_state() -> Result<String, ()> {
         
     Ok(state_string)
 }
+
+
+#[tauri::command]
+pub async fn ioctl_ping_driver() -> Result<String, ()> {
+    let response = match IpcClient::send_ipc::<String, Option<Value>>("ioctl_ping_driver", None).await {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[-] Error with IPC for get driver state: {e}");
+            "An error occurred when communicating  with the driver.".to_string()
+        },
+    };
+        
+    Ok(response)
+}

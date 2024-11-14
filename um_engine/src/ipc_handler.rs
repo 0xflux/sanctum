@@ -133,6 +133,14 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
 
 
         //
+        // IOCTL
+        //
+        "ioctl_ping_driver" => {
+            to_value(engine_clone.ioctl_ping_driver()).unwrap()
+        },
+
+
+        //
         // Unhandled requests
         //
         _ => to_value(CommandResponse {
