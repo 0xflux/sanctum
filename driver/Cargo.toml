@@ -22,6 +22,8 @@ wdk-sys = "0.3.0"
 wdk-build = "0.3.0"
 wdk-panic = "0.3.0"
 shared_no_std = { path = "../shared_no_std", default-features = false }
+serde_json = {version = "1.0.132", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 
 [profile.dev]
 panic = "abort"

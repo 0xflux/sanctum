@@ -1,12 +1,8 @@
+extern crate alloc;
+
 use serde::{Deserialize, Serialize};
+use alloc::string::String;
 use serde_json::Value;
-
-//
-// Consts
-//
-
-pub const PIPE_NAME: &'static str = r"\\.\pipe\sanctum_um_engine_pipe";
-
 //
 // Structs
 //

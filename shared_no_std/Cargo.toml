@@ -2,3 +2,7 @@
 name = "shared_no_std"
 version = "0.0.2"
 edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = {version = "1.0.132", default-features = false, features = ["alloc"] }

@@ -1,10 +1,12 @@
 use core::{ffi::c_void, ptr::null_mut};
 
-use shared_no_std::{constants::SanctumVersion, ioctl::SancIoctlPing};
-use wdk::println;
-use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, IO_STACK_LOCATION, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+use alloc::string::{String, ToString};
+use serde_json::to_value;
+use shared_no_std::{constants::{SanctumVersion, PIPE_NAME}, ioctl::SancIoctlPing, ipc::CommandRequest};
+use wdk::{nt_success, println};
+use wdk_sys::{ntddk::{RtlCopyMemoryNonTemporal, ZwCreateFile, ZwWriteFile}, FILE_ATTRIBUTE_NORMAL, FILE_OPEN, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_ALERT, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, HANDLE, HANDLE_PTR, IO_STACK_LOCATION, IO_STATUS_BLOCK, NTSTATUS, OBJECT_ATTRIBUTES, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION, _REG_NOTIFY_CLASS::RegNtPreUnLoadKey};
 
-use crate::utils::check_driver_version;
+use crate::{ffi::InitializeObjectAttributes, utils::{check_driver_version, ToUnicodeString}};
 
 struct IoctlBuffer {
     len: u32,
@@ -238,4 +240,93 @@ pub fn ioctl_check_driver_compatibility(
     }
 
     Ok(())
+}
+
+/// Send a message to the usermode engine via its named pipe
+pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) 
+    where A: serde::Serialize {
+
+    println!("[sanctum] [i] About to create named pipe");
+
+    let mut file_handle: *mut HANDLE = null_mut();
+    let mut object_attributes = OBJECT_ATTRIBUTES::default();
+    let mut pipe_name = PIPE_NAME.clone().to_unicode_string().unwrap();
+    let mut oa_handle: HANDLE = null_mut();
+    let mut io_status: *mut IO_STATUS_BLOCK = null_mut();
+
+    unsafe { InitializeObjectAttributes(
+        &mut object_attributes,
+        &mut pipe_name,
+        0,
+        oa_handle,
+        null_mut(),
+    ) };
+
+    println!("[sanctum] [i] InitializeObjectAttributes done");
+
+    let status = unsafe { ZwCreateFile(
+        file_handle,
+        GENERIC_WRITE,
+        &mut object_attributes,
+        io_status,
+        null_mut(),
+        FILE_ATTRIBUTE_NORMAL,
+        FILE_SHARE_WRITE,
+        FILE_OPEN,
+        FILE_SYNCHRONOUS_IO_NONALERT,
+        null_mut(),
+        0,
+    ) };
+
+    println!("[sanctum] [i] Status of ZwCreateFile: {status}");
+    println!("[sanctum] [i] IO Status: {}", unsafe {(*io_status).__bindgen_anon_1.Status});
+
+    if !nt_success(status) {
+        return;
+    }
+
+    //
+    // We now have a handle to the pipe, so write to the file
+    //
+
+    // serialise the args
+    let args = match args {
+        Some(a) => Some(to_value(a).unwrap()),
+        None => None,
+    };
+
+    let command = CommandRequest {
+        command: named_pipe_msg.to_string(),
+        args: args,
+    };
+
+    let command_length = size_of_val(&command);
+
+    let status = unsafe { ZwWriteFile(
+        file_handle, 
+        null_mut(), 
+        null_mut(), 
+        null_mut(), 
+        io_status, 
+        command, 
+        command_length,
+        0, 
+        null_mut(),
+    ) };
+
+    // let mut bytes_written = 0;
+    // let status = unsafe { ZwWriteFile(
+    //     file_handle,
+    //     None,
+    //     None,
+    //     None,
+    //     &mut IO_STATUS_BLOCK::default(),
+    //     message.as_ptr() as _,
+    //     message.len() as u32,
+    //     None,
+    //     None,
+    // ) };
+
+    // ZwClose(handle);
+
 }

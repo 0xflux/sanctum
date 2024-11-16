@@ -9,12 +9,13 @@ extern crate alloc;
 
 #[cfg(not(test))]
 extern crate wdk_panic;
+use wdk_panic as _;
 
 use core::core_callback_notify_ps;
 use ::core::ptr::null_mut;
 
 use ffi::IoGetCurrentIrpStackLocation;
-use ioctls::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
+use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
 use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
@@ -23,7 +24,7 @@ use wdk_alloc::WdkAllocator;
 
 mod ffi;
 mod utils;
-mod ioctls;
+mod device_comms;
 mod core;
 
 use wdk_sys::{

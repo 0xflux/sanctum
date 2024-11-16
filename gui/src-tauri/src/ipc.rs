@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{to_value, to_vec};
-use shared_std::ipc::{CommandRequest, PIPE_NAME};
+use shared_no_std::{constants::PIPE_NAME, ipc::CommandRequest};
 use tokio::{io::{self, AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{ClientOptions, NamedPipeClient}};
 
 pub struct IpcClient {

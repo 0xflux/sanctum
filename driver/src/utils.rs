@@ -4,7 +4,6 @@ use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
 
 /// A custom error enum for the Sanctum driver
-#[derive(Debug)]
 pub enum DriverError {
     NullPtr,
     LengthTooLarge,
