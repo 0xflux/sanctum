@@ -3,6 +3,7 @@
 // ******************************************************************** //
 
 use alloc::format;
+use shared_no_std::driver_ipc::ProcessStarted;
 use wdk::println;
 use wdk_sys::{HANDLE, PEPROCESS, PS_CREATE_NOTIFY_INFO};
 
@@ -22,7 +23,13 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
             return;
         }
 
-        println!("[sanctum] [i] Process started: {:#?}, command line: {}, ppid: {}, image: {}.", pid, command_line.unwrap(), ppid, image_name.unwrap());
+        let process_started = ProcessStarted {
+            image_name: image_name.unwrap(),
+            command_line: command_line.unwrap(),
+            parent_pid: ppid,
+        };
+
+        println!("[sanctum] [i] Process started: {:?}.", process_started);
         
     } else {
         // todo

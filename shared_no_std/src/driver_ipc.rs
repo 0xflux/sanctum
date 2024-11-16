@@ -3,8 +3,9 @@
 extern crate alloc;
 use alloc::string::String;
 
+#[derive(Debug)]
 pub struct ProcessStarted {
-    image_name: String,
-    command_line: String,
-    parent_pid: String,
+    pub image_name: String,
+    pub command_line: String,
+    pub parent_pid: String,
 }
