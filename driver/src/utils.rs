@@ -3,11 +3,14 @@ use shared_no_std::constants::SanctumVersion;
 use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
 
+#[derive(Debug)]
 /// A custom error enum for the Sanctum driver
 pub enum DriverError {
     NullPtr,
     LengthTooLarge,
-    Unknown(String)
+    CouldNotDecodeUnicode,
+    CouldNotEncodeUnicode,
+    Unknown(String),
 }
 
 pub trait ToUnicodeString {

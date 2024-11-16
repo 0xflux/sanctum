@@ -7,7 +7,7 @@ use shared_no_std::driver_ipc::ProcessStarted;
 use wdk::println;
 use wdk_sys::{HANDLE, PEPROCESS, PS_CREATE_NOTIFY_INFO};
 
-use crate::utils::unicode_to_string;
+use crate::{device_comms::send_msg_via_named_pipe, utils::unicode_to_string};
 
 /// Callback function for a new process being created on the system.
 pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE, created: *mut PS_CREATE_NOTIFY_INFO) {
@@ -30,6 +30,8 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
         };
 
         println!("[sanctum] [i] Process started: {:?}.", process_started);
+
+        let _ = send_msg_via_named_pipe("drvipc_process_created", Some(&process_started));
         
     } else {
         // todo

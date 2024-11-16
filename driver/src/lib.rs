@@ -9,7 +9,6 @@ extern crate alloc;
 
 #[cfg(not(test))]
 extern crate wdk_panic;
-use wdk_panic as _;
 
 use core::core_callback_notify_ps;
 use ::core::ptr::null_mut;

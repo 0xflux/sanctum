@@ -10,7 +10,7 @@ pub static DRIVER_UM_NAME: &str = "\\\\.\\SanctumEDR"; // \\.\ sets device names
 pub static SYS_INSTALL_RELATIVE_LOC: &str = "sanctum.sys";
 pub static SVC_NAME: &str = "Sanctum";
 pub static PIPE_NAME: &'static str = r"\\.\pipe\sanctum_um_engine_pipe";
-
+pub static PIPE_NAME_FOR_DRIVER: &str = r"\??\pipe\sanctum_um_engine_pipe";
 
 //
 // version info

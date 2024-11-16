@@ -63,7 +63,7 @@ impl UmIpc {
                                 };
                             },
                             // err serialising into CommandRequest
-                            Err(e) => eprintln!("Failed to deserialise request: {}", e),
+                            Err(e) => eprintln!("Failed to deserialise request: {:?}. Err: {}. Bytes read: {}", &buffer[..bytes_read], e, bytes_read),
                         }
                     },
                     // err reading IPC
@@ -160,9 +160,19 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
         "ioctl_ping_driver" => {
             to_value(engine_clone.ioctl_ping_driver()).unwrap()
         },
-        // "drvipc_process_created" => {
-            
-        // },
+        "drvipc_process_created" => {
+            println!("[i] Received drvipc_process_created");
+            if let Some(args) = request.args {
+                let process: ProcessStarted = serde_json::from_value(args).unwrap();
+                println!("[i] Process details: {:?}", process);
+                to_value("").unwrap()
+            } else {
+                to_value(CommandResponse {
+                    status: "error".to_string(),
+                    message: "No path passed to scanner".to_string(),
+                }).unwrap()
+            }
+        },  
 
 
         //
