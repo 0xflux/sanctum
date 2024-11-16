@@ -1,6 +1,8 @@
 // FFI for functions not yet implemented in the Rust Windows Driver project
 
-use wdk_sys::{PIO_STACK_LOCATION, PIRP};
+use core::ffi::c_void;
+
+use wdk_sys::{HANDLE, PIO_STACK_LOCATION, PIRP, POBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, PUNICODE_STRING};
 
 #[link(name = "ntoskrnl")]
 extern "system" {

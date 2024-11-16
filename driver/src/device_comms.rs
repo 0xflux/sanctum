@@ -1,10 +1,12 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::{ffi::c_void, ptr::{null, null_mut}};
 
-use shared_no_std::{constants::SanctumVersion, ioctl::SancIoctlPing};
-use wdk::println;
-use wdk_sys::{ntddk::RtlCopyMemoryNonTemporal, IO_STACK_LOCATION, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+use alloc::string::{String, ToString};
+use serde_json::to_value;
+use shared_no_std::{constants::{SanctumVersion, PIPE_NAME_FOR_DRIVER}, ioctl::SancIoctlPing, ipc::CommandRequest};
+use wdk::{nt_success, println};
+use wdk_sys::{ntddk::{RtlCopyMemoryNonTemporal, ZwClose, ZwCreateFile, ZwWriteFile}, FILE_ATTRIBUTE_NORMAL, FILE_OPEN, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_ALERT, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, HANDLE, HANDLE_PTR, IO_STACK_LOCATION, IO_STATUS_BLOCK, NTSTATUS, OBJECT_ATTRIBUTES, PIRP, POBJECT_ATTRIBUTES, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION, _REG_NOTIFY_CLASS::RegNtPreUnLoadKey};
 
-use crate::utils::check_driver_version;
+use crate::utils::{check_driver_version, unicode_to_string, DriverError, ToUnicodeString};
 
 struct IoctlBuffer {
     len: u32,
@@ -236,6 +238,121 @@ pub fn ioctl_check_driver_compatibility(
     unsafe {
         RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer, &response as *const bool as *const c_void, res_size);
     }
+
+    Ok(())
+}
+
+/// Send a message to the usermode engine via its named pipe.
+/// 
+/// # Args
+/// 
+/// * 'named_pipe_msg' - A string slice of the receiving named_pipe_msg which will be matched on in the receiving pipe application, 
+/// typically should be prefixed with: drvipc_. For example: drvipc_process_created.
+/// 
+/// * 'args' - Optional generic type accepting a Struct which must be serialisable, which will be sent to the receiving IPC channel.
+/// 
+/// # Returns
+/// 
+/// DriverError
+pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Result<(), DriverError>
+    where A: serde::Serialize{
+    
+    //
+    // set up structs required for ZwCreateFile
+    //
+    let mut file_handle: HANDLE = null_mut();
+    let mut pipe_name = match PIPE_NAME_FOR_DRIVER.to_unicode_string() {
+        Some(s) => s,
+        None => {
+            return Err(DriverError::CouldNotEncodeUnicode)
+        },
+    };
+    let mut io_status = IO_STATUS_BLOCK::default();
+
+    let mut object_attributes = OBJECT_ATTRIBUTES {
+        Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
+        RootDirectory: null_mut(),
+        ObjectName: &mut pipe_name,
+        Attributes: 0,
+        SecurityDescriptor: null_mut(),
+        SecurityQualityOfService: null_mut(),
+    };
+
+    let status = unsafe { ZwCreateFile(
+        &mut file_handle,
+        GENERIC_WRITE,
+        &mut object_attributes,
+        &mut io_status,
+        null_mut(),
+        FILE_ATTRIBUTE_NORMAL,
+        FILE_SHARE_WRITE,
+        FILE_OPEN,
+        FILE_SYNCHRONOUS_IO_NONALERT,
+        null_mut(),
+        0,
+    ) };
+
+    // Check both the status return, and the io_status - check separately as io_status is unsafe
+    // and could cause safety issues if status returned an error.
+    if !nt_success(status) {
+        println!("[sanctum] [-] Was not successful calling ZwCreateFile.");
+        unsafe {let _ = ZwClose(file_handle);}
+        return Err(DriverError::Unknown(status.to_string()));
+    }
+    if !nt_success(unsafe {(io_status).__bindgen_anon_1.Status}) {
+        println!("[sanctum] [-] Was not successful calling ZwCreateFile.");
+        unsafe {let _ = ZwClose(file_handle);}
+        return Err(DriverError::Unknown(unsafe {(io_status).__bindgen_anon_1.Status}.to_string()));
+    }
+
+
+    //
+    // We now have a handle to the pipe, so write to the file
+    //
+
+    // serialise the args
+    let args = match args {
+        Some(a) => Some(to_value(a).unwrap()),
+        None => None,
+    };
+
+    // construct the command
+    let command = CommandRequest {
+        command: named_pipe_msg.to_string(),
+        args: args,
+    };
+    let command_serialised = serde_json::to_vec(&command).unwrap();
+    let command_length = command_serialised.len() as u32;
+
+    // write to the pipe
+    let status = unsafe { ZwWriteFile(
+        file_handle, 
+        null_mut(), 
+        None, 
+        null_mut(), 
+        &mut io_status, 
+        command_serialised.as_ptr() as *const _ as *mut _ ,
+        command_length,
+        null_mut(),
+        null_mut(),
+    ) };
+
+    // Check both the status return, and the io_status - check separately as io_status is unsafe
+    // and could cause safety issues if status returned an error.
+    if !nt_success(status) {
+        println!("[sanctum] [-] Was not successful calling ZwWriteFile, err: {}.", status);
+        unsafe {let _ = ZwClose(file_handle);}
+        return Err(DriverError::Unknown(status.to_string()));
+    }
+    if !nt_success(unsafe {(io_status).__bindgen_anon_1.Status}) {
+        println!("[sanctum] [-] Was not successful calling ZwWriteFile. Err: {}", unsafe {(io_status).__bindgen_anon_1.Status});
+        unsafe {let _ = ZwClose(file_handle);}
+        return Err(DriverError::Unknown(unsafe {(io_status).__bindgen_anon_1.Status}.to_string()));
+    }
+
+    unsafe {let _ = ZwClose(file_handle);}
+
+    println!("[sanctum] [+] Sent IPC to usermode engine. Command len: {}, command: {:?}", command_length, command);
 
     Ok(())
 }

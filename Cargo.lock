@@ -68,7 +68,7 @@ version = "0.0.2"
 dependencies = [
  "serde",
  "serde_json",
- "shared_std",
+ "shared_no_std",
  "tauri",
  "tauri-build",
  "tokio",
@@ -3109,6 +3109,10 @@ dependencies = [
 [[package]]
 name = "shared_no_std"
 version = "0.0.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "shared_std"
