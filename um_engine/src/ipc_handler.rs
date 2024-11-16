@@ -47,19 +47,19 @@ impl UmIpc {
                                 //
                                 // Handle the incoming IPC request here
                                 //
-                                let response = handle_ipc(request, engine_clone);
-    
-                                //
-                                // Serialise and send the response back to the client
-                                //
-                                match to_vec(&response) {
-                                    Ok(response_bytes) => {
-                                        if let Err(e) = client.write_all(&response_bytes).await {
-                                            eprintln!("[-] Failed to send response to client via pipe: {}", e);
-                                        }
-                                    },
-                                    // err serialising to vec
-                                    Err(e) => eprintln!("[-] Failed to serialise response: {}", e),
+                                if let Some(response) = handle_ipc(request, engine_clone) {
+                                    //
+                                    // Serialise and send the response back to the client
+                                    //
+                                    match to_vec(&response) {
+                                        Ok(response_bytes) => {
+                                            if let Err(e) = client.write_all(&response_bytes).await {
+                                                eprintln!("[-] Failed to send response to client via pipe: {}", e);
+                                            }
+                                        },
+                                        // err serialising to vec
+                                        Err(e) => eprintln!("[-] Failed to serialise response: {}", e),
+                                    };
                                 };
                             },
                             // err serialising into CommandRequest
@@ -80,7 +80,18 @@ impl UmIpc {
 /// string based command to decide on what to do, this is considered the heart of the tasking of the 
 /// engine where its come from the GUI, or even other sources which may feed in via IPC (such as injected
 /// DLL's)
-pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value {
+/// 
+/// # Args
+/// 
+/// * 'request' - The CommandRequest type which will be matched on and logic will be executed accordingly.
+/// * 'engine_clone' - An Arc of the UmEngine
+/// 
+/// # Returns
+/// 
+/// None if there is to be no response to the IPC - will usually be the case in respect of the driver sending a message. 
+/// As the IPC channel is a 'one shot' from the driver implemented natively, the pipe will be closed on receipt in this function.
+/// In the case of a Tokio IPC pipe, a response can be sent, in which case, it will be serialised to a Value and sent wrapped in a Some.
+pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Option<Value> {
     let response: Value = match request.command.as_str() {
 
         //
@@ -165,13 +176,15 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
             if let Some(args) = request.args {
                 let process: ProcessStarted = serde_json::from_value(args).unwrap();
                 println!("[i] Process details: {:?}", process);
-                to_value("").unwrap()
             } else {
                 to_value(CommandResponse {
                     status: "error".to_string(),
                     message: "No path passed to scanner".to_string(),
-                }).unwrap()
-            }
+                }).unwrap();
+            };
+
+            // return none as we wont want to send data back, the pipe is closed.
+            return None;
         },  
 
 
@@ -184,6 +197,6 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Value
         }).unwrap(),
     };
 
-    response
+    Some(response)
 
 }
