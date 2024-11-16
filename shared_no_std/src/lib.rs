@@ -5,3 +5,4 @@
 pub mod constants;
 pub mod ioctl;
 pub mod gui_traits;
+pub mod driver_ipc;

@@ -1,7 +1,15 @@
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{format, string::{String, ToString}, vec::Vec};
 use shared_no_std::constants::SanctumVersion;
 use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
+
+/// A custom error enum for the Sanctum driver
+#[derive(Debug)]
+pub enum DriverError {
+    NullPtr,
+    LengthTooLarge,
+    Unknown(String)
+}
 
 pub trait ToUnicodeString {
     fn to_unicode_string(&self) -> Option<UNICODE_STRING>;
@@ -102,13 +110,13 @@ pub fn check_driver_version(client_version: &SanctumVersion) -> bool {
 }
 
 /// Converts a UNICODE_STRING into a valid String (lossy) that can be printed
-pub fn unicode_to_str(input: *const UNICODE_STRING) -> Option<String> {
+pub fn unicode_to_string(input: *const UNICODE_STRING) -> Result<String, DriverError> {
     
     const MAX_LEN: u16 = 256;
     
     if input.is_null() {
         println!("[sanctum] [-] Error converting unicode string to string, null pointer.");
-        return None;
+        return Err(DriverError::NullPtr);
     }
 
     // if we aren't dereferencing a null pointer checked above, then check the length of the input string isn't greater
@@ -116,7 +124,7 @@ pub fn unicode_to_str(input: *const UNICODE_STRING) -> Option<String> {
     unsafe {
         if (*input).Length >= MAX_LEN {
             println!("[sanctum] [-] Len of input UNICODE_STRING {} is greater than MAX_LEN {}.", (*input).Length, MAX_LEN);
-            return None;
+            return Err(DriverError::LengthTooLarge);
         }
     }
 
@@ -138,8 +146,7 @@ pub fn unicode_to_str(input: *const UNICODE_STRING) -> Option<String> {
     };
 
     if res != STATUS_SUCCESS {
-        println!("[sanctum] [-] Error converting UNICODE_STRING to ANSI String. Code: {res}");
-        return None;
+        return Err(DriverError::Unknown(format!("Error converting UNICODE_STRING to ANSI String. Code: {res}")));
     }
 
     let s = unsafe {
@@ -147,5 +154,5 @@ pub fn unicode_to_str(input: *const UNICODE_STRING) -> Option<String> {
         String::from_utf8_lossy(slice).to_string()
     };
 
-    Some(s)
+    Ok(s)
 }

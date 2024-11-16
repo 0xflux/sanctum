@@ -3,7 +3,6 @@
 
 pub use crate::filescanner::FileScannerState;
 pub use crate::driver_manager::DriverState;
-pub use crate::filescanner::{MatchedIOC, ScanResult, ScanType};
 pub use crate::settings::SanctumSettings;
 pub use crate::filescanner::ScanningLiveInfo;
 
