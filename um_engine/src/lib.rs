@@ -1,3 +1,6 @@
+//! The lib.rs is required to export certain structs through to the GUI. This could be implemented
+//! via a shared crate - but for now it is fine.  This may be a future refactor.
+
 #![feature(io_error_uncategorized)]
 
 pub use filescanner::FileScannerState;

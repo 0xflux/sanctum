@@ -1,3 +1,7 @@
+//! The main entrypoint for the usermode engine for the Sanctum EDR. This will run as a service
+//! on the host machine and is responsible for all EDR related activity in usermode, including
+//! communicating with the driver, GUI, DLL's; performing scanning; and decision making.
+
 #![feature(io_error_uncategorized)]
 
 use communication::ipc::UmIpc;
