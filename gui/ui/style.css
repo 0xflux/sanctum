@@ -155,3 +155,16 @@ p.error_msg, span.error_msg {
     margin-top: -50px;
     display: inline;
 }
+
+.scroll-box {
+    width: 100%;
+    height: 400px; 
+    border: 1px solid #ccc;
+    background-color: #f5f5f5;
+    overflow-y: auto;
+    overflow-x: scroll;
+    padding: 10px;
+    font-family: monospace;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }

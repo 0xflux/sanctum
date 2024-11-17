@@ -13,7 +13,7 @@
 			const { invoke } = window.__TAURI__.core;
 			const { listen } = window.__TAURI__.event;
 	
-			const possibleStates = ['Uninstalled', 'Installed', 'Running', 'Stopped', 'ErrorStopped'];
+			let globalState = 'Uninstalled';
 	
 			const TIMEOUT_WAIT = 20;
 	
@@ -86,6 +86,9 @@
 				const j = JSON.parse(response);
 				const [key, value] = Object.entries(j)[0];
 
+				// set the global state of the page
+				globalState = key;
+
 				document.getElementById("driver_state_msg").innerText = key;
 
 				if (value) {
@@ -95,15 +98,62 @@
 				}
 			}
 
+			function formatMessage(input) {
+				const lines = [];
+
+				// Handle additional fields like `messages` and `process_creations`
+				if (input.messages && input.messages.length > 0) {
+					input.messages.forEach((msg, index) => {
+						lines.push(`[dbg] ${msg}`);
+					});
+				}
+
+				if (input.process_creations && input.process_creations.length > 0) {
+					input.process_creations.forEach((creation, index) => {
+						const creationDetails = Object.entries(creation)
+							.map(([key, value]) => `${key}: ${value}`)
+							.join(", ");
+						lines.push(`[process started] ${creationDetails}`);
+					});
+				}
+
+				// Join all lines into a single formatted string
+				return lines.join("\n");
+			}
+
 
 			//
 			// Async kernel messages
 			//
 			(function get_kernel_messages() {
-				invoke('driver_get_kernel_debug_messages')
+
+				// only run this when we are running the driver
+				console.log("State: ", globalState);
+				if (globalState == 'Started') {
+					invoke('driver_get_kernel_debug_messages')
 					.then((response) => {
-						console.log("Messages: ", response)
+						const data = JSON.parse(response);
+
+						// early check if all fields are empty then wait until the next IPC
+						if (
+							(!data.messages || data.messages.length === 0) && 
+							(!data.process_creations || data.process_creations.length === 0)
+						) {
+							return;
+						}
+						
+						const kernelOutput = document.getElementById('kernel-output');
+						const formattedMessage = formatMessage(data);
+
+						// Create a new div for the message
+						const messageDiv = document.createElement('div');
+						messageDiv.innerHTML = formattedMessage.replace(/\n/g, '<br>'); 
+
+						// Insert the new message at the top
+						kernelOutput.prepend(messageDiv);
+
 					}).catch((error) => console.error("Invoke error:", error));
+				}
 
 				setTimeout( get_kernel_messages, 500 ); // tick speed
 			})();
@@ -142,6 +192,9 @@
 						<button type="submit" class="single_box_button scan_control_button" id="ping_driver">Ping driver</button>
 					</form>
 				</div>
+
+				<h3>Kernel debug output messages:</h3>
+				<div id="kernel-output" class="scroll-box"></div>
 			
 			</article>								
 		</main>
