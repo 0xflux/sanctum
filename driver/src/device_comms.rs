@@ -295,7 +295,7 @@ pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Res
     // Check both the status return, and the io_status - check separately as io_status is unsafe
     // and could cause safety issues if status returned an error.
     if !nt_success(status) {
-        println!("[sanctum] [-] Was not successful calling ZwCreateFile.");
+        println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}.", status);
         unsafe {let _ = ZwClose(file_handle);}
         return Err(DriverError::Unknown(status.to_string()));
     }

@@ -2,7 +2,7 @@
 // ************************** CORE CALLBACKS ************************** //
 // ******************************************************************** //
 
-use alloc::format;
+use alloc::{format, string::ToString};
 use shared_no_std::driver_ipc::ProcessStarted;
 use wdk_sys::{HANDLE, PEPROCESS, PS_CREATE_NOTIFY_INFO};
 
@@ -29,7 +29,7 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
         };
 
         // println!("[sanctum] [i] Process started: {:?}.", process_started);
-
+        let _ = send_msg_via_named_pipe("drvipc_dbg_msg", Some(&"Sending process creation info...".to_string()));
         let _ = send_msg_via_named_pipe("drvipc_process_created", Some(&process_started));
         
     } else {
