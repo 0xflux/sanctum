@@ -185,7 +185,6 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
             to_value(engine_clone.ioctl_ping_driver()).unwrap()
         },
         "drvipc_process_created" => {
-            println!("[i] Received drvipc_process_created");
             if let Some(args) = request.args {
                 // print for console
                 let process: ProcessStarted = serde_json::from_value(args).unwrap();
@@ -193,7 +192,6 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
                 // add the kernel message to the queue
                 engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.push_process_creations(&process);
 
-                println!("[i] Process details: {:?}", process);
             } else {
                 to_value(CommandResponse {
                     status: "error".to_string(),

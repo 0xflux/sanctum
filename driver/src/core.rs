@@ -4,7 +4,6 @@
 
 use alloc::format;
 use shared_no_std::driver_ipc::ProcessStarted;
-use wdk::println;
 use wdk_sys::{HANDLE, PEPROCESS, PS_CREATE_NOTIFY_INFO};
 
 use crate::{device_comms::send_msg_via_named_pipe, utils::unicode_to_string};
@@ -24,17 +23,17 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
         }
 
         let process_started = ProcessStarted {
-            image_name: image_name.unwrap(),
-            command_line: command_line.unwrap(),
+            image_name: image_name.unwrap().replace("\\??\\", ""),
+            command_line: command_line.unwrap().replace("\\??\\", ""),
             parent_pid: ppid,
         };
 
-        println!("[sanctum] [i] Process started: {:?}.", process_started);
+        // println!("[sanctum] [i] Process started: {:?}.", process_started);
 
         let _ = send_msg_via_named_pipe("drvipc_process_created", Some(&process_started));
         
     } else {
         // todo
-        println!("[sanctum] [-] Process terminated");
+        // println!("[sanctum] [-] Process terminated");
     }
 }

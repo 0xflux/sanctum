@@ -352,7 +352,5 @@ pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Res
 
     unsafe {let _ = ZwClose(file_handle);}
 
-    println!("[sanctum] [+] Sent IPC to usermode engine. Command len: {}, command: {:?}", command_length, command);
-
     Ok(())
 }
