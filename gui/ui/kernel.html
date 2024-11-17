@@ -94,6 +94,20 @@
 					document.getElementById("driver_state_with_err").innerText = "";
 				}
 			}
+
+
+			//
+			// Async kernel messages
+			//
+			(function get_kernel_messages() {
+				invoke('driver_get_kernel_debug_messages')
+					.then((response) => {
+						console.log("Messages: ", response)
+					}).catch((error) => console.error("Invoke error:", error));
+
+				setTimeout( get_kernel_messages, 500 ); // tick speed
+			})();
+
 		});
 	</script>
 

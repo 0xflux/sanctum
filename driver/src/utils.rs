@@ -114,7 +114,7 @@ pub fn check_driver_version(client_version: &SanctumVersion) -> bool {
 /// Converts a UNICODE_STRING into a valid String (lossy) that can be printed
 pub fn unicode_to_string(input: *const UNICODE_STRING) -> Result<String, DriverError> {
     
-    const MAX_LEN: u16 = 256;
+    const MAX_LEN: u16 = 4096;
     
     if input.is_null() {
         println!("[sanctum] [-] Error converting unicode string to string, null pointer.");

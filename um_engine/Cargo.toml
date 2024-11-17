@@ -20,11 +20,3 @@ serde_json = "1.0.133"
 tokio = {version="1.41.1", features = ["full"] }
 md-5 = "0.10.6"
 reqwest = {version = "0.12.9", features = []}
-
-[lib]
-name = "um_engine"
-path = "src/lib.rs"
-
-[[bin]]
-name = "um_engine_bin"
-path = "src/main.rs"

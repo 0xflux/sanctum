@@ -1,8 +1,8 @@
 //! The main setup and more general functions for the driver manager module for the usermode engine
 
-use std::{os::windows::ffi::OsStrExt, path::PathBuf};
+use std::{os::windows::ffi::OsStrExt, path::PathBuf, sync::RwLock};
 use shared_no_std::constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC};
-use shared_std::driver_manager::DriverState;
+use shared_std::driver_manager::{DriverState, KernelDbgMsgQueue};
 use windows::{
     core::PCWSTR,
     Win32::{
@@ -28,6 +28,7 @@ pub struct SanctumDriverManager {
     pub(super) svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
     pub state: DriverState,
+    pub dbg_msg_queue: KernelDbgMsgQueue,
 }
 
 
@@ -57,8 +58,9 @@ impl SanctumDriverManager {
             device_um_symbolic_link_name,
             svc_path: sys_file_path,
             svc_name,
-            handle_via_path: DriverHandleRaii::default(), // set to None
-            state: DriverState::Uninstalled("".to_string()), // todo will need to check if is installed
+            handle_via_path: DriverHandleRaii::default(), // sets to None
+            state: DriverState::Uninstalled("".to_string()),
+            dbg_msg_queue: KernelDbgMsgQueue::new(),
         };
 
         // attempt an install of the driver

@@ -172,6 +172,9 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "driver_get_state" => {
             to_value(engine_clone.driver_get_state()).unwrap()
         },
+        "driver_collect_knl_dbg_msg" => {
+            to_value(engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.get_and_empty()).unwrap()
+        }
 
 
         //
@@ -183,6 +186,10 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "drvipc_process_created" => {
             println!("[i] Received drvipc_process_created");
             if let Some(args) = request.args {
+                // add the kernel message to the queue
+                engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.push(&args);
+
+                // print for console
                 let process: ProcessStarted = serde_json::from_value(args).unwrap();
                 println!("[i] Process details: {:?}", process);
             } else {

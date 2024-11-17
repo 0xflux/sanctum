@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{to_value, Value};
 use shared_std::driver_manager::DriverState;
 use crate::ipc::IpcClient;
 
@@ -104,4 +104,25 @@ pub async fn ioctl_ping_driver() -> Result<String, ()> {
     };
         
     Ok(response)
+}
+
+
+/// Poll the usermode engine for any new messages from the kernel which need to be processed by the GUI; this is only 
+/// for the driver controller page
+#[tauri::command]
+pub async fn driver_get_kernel_debug_messages() -> Result<String, ()> {
+    let state = match IpcClient::send_ipc::<Value, Option<Value>>("driver_collect_knl_dbg_msg", None).await {
+        Ok(s) => {
+            println!("[i] Received kernel msg: {}", s);
+            s
+        },
+        Err(e) => {
+            eprintln!("[-] Error with IPC for get driver state: {e}");
+            to_value("").unwrap()
+        },
+    };
+
+    let state_string = serde_json::to_string(&state).unwrap();
+        
+    Ok(state_string)
 }
