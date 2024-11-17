@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProcessStarted {
     pub image_name: String,
     pub command_line: String,

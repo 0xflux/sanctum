@@ -60,7 +60,7 @@ impl SanctumDriverManager {
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // sets to None
             state: DriverState::Uninstalled("".to_string()),
-            dbg_msg_queue: KernelDbgMsgQueue::new(),
+            dbg_msg_queue: KernelDbgMsgQueue::default(),
         };
 
         // attempt an install of the driver
