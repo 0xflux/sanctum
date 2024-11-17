@@ -1,4 +1,4 @@
-use alloc::{format, string::{String, ToString}, vec::Vec};
+use alloc::{vec, format, string::{String, ToString}, vec::Vec};
 use shared_no_std::constants::SanctumVersion;
 use wdk::println;
 use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING, UNICODE_STRING};
@@ -111,50 +111,39 @@ pub fn check_driver_version(client_version: &SanctumVersion) -> bool {
     true
 }
 
-/// Converts a UNICODE_STRING into a valid String (lossy) that can be printed
+/// Converts a UNICODE_STRING into a `String` (lossy) for printing.
+///
+/// # Errors
+/// - `DriverError::NullPtr` if the input is null.
+/// - `DriverError::LengthTooLarge` if the input exceeds `MAX_LEN`.
+/// - `DriverError::Unknown` if the conversion fails.
 pub fn unicode_to_string(input: *const UNICODE_STRING) -> Result<String, DriverError> {
-    
-    const MAX_LEN: u16 = 4096;
-    
+
     if input.is_null() {
-        println!("[sanctum] [-] Error converting unicode string to string, null pointer.");
+        println!("[sanctum] [-] Null pointer passed to unicode_to_string.");
         return Err(DriverError::NullPtr);
     }
 
-    // if we aren't dereferencing a null pointer checked above, then check the length of the input string isn't greater
-    // than our buffer max length we are going to write to
-    unsafe {
-        if (*input).Length >= MAX_LEN {
-            println!("[sanctum] [-] Len of input UNICODE_STRING {} is greater than MAX_LEN {}.", (*input).Length, MAX_LEN);
-            return Err(DriverError::LengthTooLarge);
-        }
-    }
+    let unicode = unsafe { &*input };
 
-    // todo can probably do straight from UNICODE_STRING no need to convert
-    let mut buf: [i8; MAX_LEN as usize] = [0; MAX_LEN as usize]; 
-    let mut s: STRING = STRING {
+    // Allocate a heap buffer for the ANSI string with a size based on `unicode.Length`.
+    let mut buf: Vec<i8> = vec![0; (unicode.Length + 1) as usize];
+    let mut ansi = STRING {
         Length: 0,
-        MaximumLength: MAX_LEN, // give it the max len of a u16
-        Buffer: &mut buf as *mut i8,
+        MaximumLength: (buf.len() + 1) as u16,
+        Buffer: buf.as_mut_ptr(),
     };
 
-    //
-    // Convert the unicode string to an ANSI string, then we will construct a normal String from raw parts - this may be extra conversion than 
-    // converting the unicode string from raw parts without the above step. Doing so was resulting in bsod, trying to diagnose.
-    // todo
-    //
-    let res = unsafe {
-        RtlUnicodeStringToAnsiString(&mut s, input, FALSE as u8)
-    };
-
-    if res != STATUS_SUCCESS {
-        return Err(DriverError::Unknown(format!("Error converting UNICODE_STRING to ANSI String. Code: {res}")));
+    // convert the UNICODE_STRING to an ANSI string.
+    let status = unsafe { RtlUnicodeStringToAnsiString(&mut ansi, unicode, FALSE as u8) };
+    if status != STATUS_SUCCESS {
+        println!("[sanctum] [-] RtlUnicodeStringToAnsiString failed with status {status}.");
+        return Err(DriverError::Unknown(format!(
+            "Conversion failed with status code: {status}"
+        )));
     }
 
-    let s = unsafe {
-        let slice = core::slice::from_raw_parts(s.Buffer as *const u8, s.Length as usize);
-        String::from_utf8_lossy(slice).to_string()
-    };
-
-    Ok(s)
+    // create the String
+    let slice = unsafe { core::slice::from_raw_parts(ansi.Buffer as *const u8, ansi.Length as usize) };
+    Ok(String::from_utf8_lossy(slice).to_string())
 }
