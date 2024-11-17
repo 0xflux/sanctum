@@ -1,102 +1,29 @@
-use core::str;
-use std::{ffi::c_void, os::windows::ffi::OsStrExt, path::PathBuf, ptr::null_mut, slice::from_raw_parts};
-
-use shared_no_std::{
-    constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC, VERSION_CLIENT},
-    ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
-};
+use std::ptr::null_mut;
 use windows::{
     core::{Error, PCWSTR},
     Win32::{
         Foundation::{
-            CloseHandle, GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS,
-            GENERIC_READ, GENERIC_WRITE, HANDLE, MAX_PATH,
+            GetLastError, ERROR_DUPLICATE_SERVICE_NAME, ERROR_SERVICE_EXISTS,
+            GENERIC_READ, GENERIC_WRITE,
         },
         Storage::FileSystem::{
-            CreateFileW, GetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING
         },
-        System::{
-            LibraryLoader::GetModuleFileNameW,
+        System::
             Services::{
                 CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW,
                 OpenServiceW, StartServiceW, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS,
                 SERVICE_CONTROL_STOP, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL,
                 SERVICE_KERNEL_DRIVER, SERVICE_STATUS,
             },
-            IO::DeviceIoControl,
-        },
     },
 };
 
-use crate::strings::ToUnicodeString;
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DriverState {
-    Uninstalled(String),
-    Installed(String),
-    Started(String),
-    Stopped(String),
-}
+use crate::driver_manager::DriverHandleRaii;
 
-/// The SanctumDriverManager holds key information to be shared between
-/// modules which relates to uniquely identifiable attributes such as its name
-/// and other critical settings.
-/// 
-/// # Safety
-/// 
-/// The structure implements Send and Sync for the Handle stored in DriverHandleRaii. This should be safe as all accesses to the driver handle
-/// will live for the lifetime of the object. If the handle could be null, the wrapping Option **should** be None.
-pub struct SanctumDriverManager {
-    pub device_um_symbolic_link_name: Vec<u16>,
-    svc_path: Vec<u16>,
-    svc_name: Vec<u16>,
-    pub handle_via_path: DriverHandleRaii,
-    pub state: DriverState,
-}
-
+use super::driver_manager::{DriverState, SanctumDriverManager};
 impl SanctumDriverManager {
-    /// Generate a new instance of the driver manager, which initialises the device name path and symbolic link path
-    pub fn new() -> SanctumDriverManager {
-        //
-        // Generate the UNICODE_STRING values for the device and symbolic name
-        //
-        let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
-
-        let appdata = std::env::var("APPDATA").expect("[-] Could not find App Data folder in environment variables.]");
-        let sys_file_path: Vec<u16> = PathBuf::from(appdata).join(SANC_SYS_FILE_LOCATION).as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-
-        let svc_name = SVC_NAME.to_u16_vec();
-
-        // check the sys file exists
-        // todo this eventually should be in the actual install directory under Windows
-        let x = unsafe { GetFileAttributesW(PCWSTR::from_raw(sys_file_path.as_ptr())) };
-        if x == INVALID_FILE_ATTRIBUTES {
-            panic!("[-] Cannot find sanctum.sys. Err: {}. Ensure the driver file is at: {:?}", unsafe {
-                GetLastError().0
-            }, sys_file_path);
-        }
-
-        let mut instance = SanctumDriverManager {
-            device_um_symbolic_link_name,
-            svc_path: sys_file_path,
-            svc_name,
-            handle_via_path: DriverHandleRaii::default(), // set to None
-            state: DriverState::Uninstalled("".to_string()), // todo will need to check if is installed
-        };
-
-        // attempt an install of the driver
-        instance.install_driver();
-
-        // attempt to initialise a handle to the driver, this may silently fail - and will do so in the case
-        // where the driver is not yet installed (or has been uninstalled)
-        if instance.init_handle_via_registry() {
-            instance.state = DriverState::Started("".to_string());
-        }
-
-        instance
-    }
-
-
     /// Command for the driver manager to install the driver on the target device.
     ///
     /// # Panics
@@ -365,244 +292,8 @@ impl SanctumDriverManager {
 
         true
     }
-
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////// IOCTLS ////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // All IOCTL functions should start with ioctl_
-
-    /// Checks the driver compatibility between the driver and user mode applications. 
-    /// 
-    /// # Panics
-    /// 
-    /// This function will panic if it cannot obtain a handle to the driver to communicate with it.
-    /// 
-    /// # Returns
-    /// 
-    /// If they are not compatible the driver will return false, otherwise it will return true.
-    fn ioctl_check_driver_compatibility(&mut self) -> bool {
-        if self.handle_via_path.handle.is_none() {
-            // try 1 more time
-            self.init_handle_via_registry();
-            if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}. Exiting the driver.", 
-                    self.handle_via_path.handle
-                );
-                
-                // stop the driver then panic
-                self.stop_driver();
-
-                // todo in the future have some gui option instead of a panic
-                panic!("[-] Unable to communicate with the driver to check version compatibility, please try again.");
-            }
-        }
-
-        let mut response: bool = false;
-        let mut bytes_returned: u32 = 0;
-
-        let result = unsafe {
-            DeviceIoControl(
-                self.handle_via_path.handle.unwrap(),
-                SANC_IOCTL_CHECK_COMPATIBILITY,
-                Some(&VERSION_CLIENT as *const _ as *const c_void),
-                size_of_val(&VERSION_CLIENT) as u32,
-                Some(&mut response as *mut _ as *mut c_void),
-                size_of_val(&response) as u32,
-                Some(&mut bytes_returned),
-                None,
-            )
-        };
-
-        // error checks
-        if let Err(e) = result {
-            eprintln!("[-] Error fetching version result from driver. {e}");
-            return false;
-        }
-        if bytes_returned == 0 {
-            eprintln!("[-] Error fetching version result from driver. Zero bytes returned from the driver.");
-            return false;
-        }
-
-        println!("[i] Response is: {}", response);
-
-        response
-    }
-
-    /// Ping the driver from usermode
-    pub fn ioctl_ping_driver(&mut self) -> String {
-        //
-        // Check the handle to the driver is valid, if not, attempt to initialise it.
-        //
-
-        // todo improve how the error handling happens..
-        if self.handle_via_path.handle.is_none() {
-            // try 1 more time
-            self.init_handle_via_registry();
-            if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}", 
-                    self.handle_via_path.handle
-                );
-                return "".to_string();
-            }
-        }
-
-        //
-        // If we have a handle
-        //
-
-        let message = "Hello world".as_bytes();
-        const RESP_SIZE: u32 = 256; // todo
-        let mut response: [u8; RESP_SIZE as usize] = [0; RESP_SIZE as usize]; // gets mutated in unsafe block
-        let mut bytes_returned: u32 = 0;
-
-        // attempt the call
-        let result = unsafe {
-            // todo implementation for WriteFile
-            // WriteFile(
-            //     self.handle_via_path.handle.unwrap(), 
-            //     Some(message), 
-            //     Some(&mut bytes_returned),
-            //     None,
-            // )
-            DeviceIoControl(
-                self.handle_via_path.handle.unwrap(),
-                SANC_IOCTL_PING,
-                Some(message.as_ptr() as *const _),
-                message.len() as u32,
-                Some(response.as_mut_ptr() as *mut c_void),
-                RESP_SIZE,
-                Some(&mut bytes_returned),
-                None,
-            )
-        };
-
-        if let Err(e) = result {
-            eprintln!("Error from attempting IOCTL call. {e}");
-            // no cleanup required, no additional handles or heap objects
-            return "".to_string();
-        }
-
-        println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
-
-        // parse out the result
-        if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-            println!("[+] IOCTL - Bytes returned: {bytes_returned} response: {:#?}", response);
-            return response.to_string();
-        } else {
-            println!("[-] Error parsing response as UTF-8");
-            return "".to_string();
-        }
-    }
-
-
-    /// Pings the driver with a struct as its message
-    pub fn ioctl_ping_driver_w_struct(&mut self) {
-        //
-        // Check the handle to the driver is valid, if not, attempt to initialise it.
-        //
-
-        // todo improve how the error handling happens..
-        if self.handle_via_path.handle.is_none() {
-            // try 1 more time
-            self.init_handle_via_registry();
-            if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}", 
-                    self.handle_via_path.handle
-                );
-                return;
-            }
-        }
-
-        //
-        // If we have a handle
-        //
-        let ver = "Hello from usermode!".as_bytes();        
-        let mut message = SancIoctlPing::new();
-        if ver.len() > message.capacity {
-            eprintln!("[-] Message too long for buffer.");
-            return;
-        }
-
-        // copy the message into the array
-        message.version[..ver.len()].copy_from_slice(ver);
-        message.str_len = ver.len();
-        message.received = true;
-
-        let mut response = SancIoctlPing::new();
-        let mut bytes_returned: u32 = 0;
-
-        // attempt the call
-        let result = unsafe {
-            DeviceIoControl(
-                self.handle_via_path.handle.unwrap(),
-                SANC_IOCTL_PING_WITH_STRUCT,
-                Some(&message as *const _ as *const c_void),
-                std::mem::size_of_val(&message) as u32,
-                Some(&mut response as *mut _ as *mut c_void),
-                std::mem::size_of_val(&response) as u32,
-                Some(&mut bytes_returned),
-                None,
-            )
-        };
-
-        if let Err(e) = result {
-            eprintln!("[-] Error from attempting IOCTL call. {e}");
-            return;
-        }
-
-        // parse out the result
-        if bytes_returned == 0 {
-            eprintln!("[-] No bytes returned from DeviceIOControl");
-            return;
-        }
-
-        let constructed = unsafe {from_raw_parts(response.version.as_ptr(), response.str_len)};
-
-        println!("[+] Response from driver: {}, {:?}", response.received, std::str::from_utf8(constructed));
-
-    }
-
-
-    pub fn get_state(&self) -> DriverState {
-        self.state.clone()
-    }
 }
 
-
-impl Default for SanctumDriverManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-unsafe impl Send for SanctumDriverManager {}
-unsafe impl Sync for SanctumDriverManager {}
-
-pub struct DriverHandleRaii {
-    pub handle: Option<HANDLE>,
-}
-
-impl Default for DriverHandleRaii {
-    fn default() -> Self {
-        Self { handle: None }
-    }
-}
-
-
-impl Drop for DriverHandleRaii {
-    fn drop(&mut self) {
-        if self.handle.is_some() && !self.handle.unwrap().is_invalid() {
-            println!("[i] Dropping driver handle.");
-            let _ = unsafe { CloseHandle(self.handle.unwrap()) };
-            self.handle = None;
-        }
-    }
-}
 
 /// A custom struct to hold a SC_HANDLE. This struct implements the drop trait so that
 /// when it goes out of scope, it will clean up its handle so you do not need to remember
@@ -695,29 +386,4 @@ impl Drop for ServiceControlManager {
             eprintln!("[-] Unable to close handle, handle was null!");
         }
     }
-}
-
-
-/// Gets the path to the .sys file on the target device, for the time being this needs to be
-/// located in the same folder as where this usermode exe is run from.
-fn get_sys_file_path() -> Vec<u16> {
-    //
-    // A little long winded, but construct the path as a PCWSTR to where the sys driver is
-    // this should be bundled into the same location as where the usermode exe is.
-    //
-    let mut svc_path: Vec<u16> = vec![0u16; MAX_PATH as usize];
-    let len = unsafe { GetModuleFileNameW(None, &mut svc_path) };
-    if len == 0 {
-        eprintln!(
-            "[-] Error getting path of module. Win32 Error: {}",
-            unsafe { GetLastError().0 }
-        );
-    } else if len >= MAX_PATH {
-        panic!("[-] Path of module is too long. Run from a location with a shorter path.");
-    }
-
-    svc_path.truncate(len as usize - 11); // remove um_engine.sys\0
-    svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file
-
-    svc_path
 }

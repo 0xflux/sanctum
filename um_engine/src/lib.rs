@@ -12,4 +12,4 @@ mod strings;
 mod settings;
 mod filescanner;
 mod utils;
-mod ipc_handler;
+mod communication;

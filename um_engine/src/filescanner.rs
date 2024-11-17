@@ -4,9 +4,7 @@
 //! information about a file that the EDR may want to use in decision making. 
 
 use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read, Write}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
-
 use md5::{Digest, Md5};
-// use sha2::{Sha256, Digest};
 use shared_no_std::constants::IOC_LIST_LOCATION;
 use serde::{Deserialize, Serialize};
 

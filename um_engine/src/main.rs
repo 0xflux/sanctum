@@ -1,6 +1,6 @@
 #![feature(io_error_uncategorized)]
 
-use ipc_handler::UmIpc;
+use communication::ipc::UmIpc;
 use engine::UmEngine;
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ mod strings;
 mod settings;
 mod filescanner;
 mod utils;
-mod ipc_handler;
+mod communication;
 
 
 #[tokio::main]
