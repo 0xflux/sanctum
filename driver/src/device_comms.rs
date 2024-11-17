@@ -331,8 +331,10 @@ pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Res
         command: named_pipe_msg.to_string(),
         args: args,
     };
+
+    // todo BUG - this caps at 1024 bytes?
     let command_serialised = serde_json::to_vec(&command).unwrap();
-    println!("Preparing to send: {:?}, len@ {}", command_serialised, command_serialised.len());
+    // println!("Preparing to send: {:?}, len@ {}", command_serialised, command_serialised.len());
     let command_length = command_serialised.len() as u32;
 
     // write to the pipe
