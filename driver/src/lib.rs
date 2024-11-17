@@ -13,8 +13,9 @@ extern crate wdk_panic;
 use core::core_callback_notify_ps;
 use ::core::ptr::null_mut;
 
+use alloc::{format, string::ToString};
 use ffi::IoGetCurrentIrpStackLocation;
-use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct};
+use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct, send_msg_via_named_pipe};
 use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
@@ -42,6 +43,7 @@ pub unsafe extern "system" fn driver_entry(
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] Starting Sanctum driver... Version: {}", VERSION_DRIVER);
+    let _ = send_msg_via_named_pipe("drvipc_dbg_msg", Some(&format!("Starting Sanctum driver... Version: {}", VERSION_DRIVER)));
 
     let status = configure_driver(driver, registry_path as *mut _);
 

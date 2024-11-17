@@ -1,12 +1,11 @@
-use core::{ffi::c_void, ptr::{null, null_mut}};
+use core::{ffi::c_void, ptr::null_mut};
 
-use alloc::string::{String, ToString};
+use alloc::{format, string::ToString};
 use serde_json::to_value;
 use shared_no_std::{constants::{SanctumVersion, PIPE_NAME_FOR_DRIVER}, ioctl::SancIoctlPing, ipc::CommandRequest};
 use wdk::{nt_success, println};
-use wdk_sys::{ntddk::{RtlCopyMemoryNonTemporal, ZwClose, ZwCreateFile, ZwWriteFile}, FILE_ATTRIBUTE_NORMAL, FILE_OPEN, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_ALERT, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, HANDLE, HANDLE_PTR, IO_STACK_LOCATION, IO_STATUS_BLOCK, NTSTATUS, OBJECT_ATTRIBUTES, PIRP, POBJECT_ATTRIBUTES, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION, _REG_NOTIFY_CLASS::RegNtPreUnLoadKey};
-
-use crate::utils::{check_driver_version, unicode_to_string, DriverError, ToUnicodeString};
+use wdk_sys::{ntddk::{KeDelayExecutionThread, RtlCopyMemoryNonTemporal, ZwClose, ZwCreateFile, ZwWriteFile}, FALSE, FILE_ATTRIBUTE_NORMAL, FILE_OPEN, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, HANDLE, IO_STATUS_BLOCK, LARGE_INTEGER, NTSTATUS, OBJECT_ATTRIBUTES, PIRP, PLARGE_INTEGER, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION, _MODE::KernelMode};
+use crate::utils::{check_driver_version, DriverError, ToUnicodeString};
 
 struct IoctlBuffer {
     len: u32,
@@ -256,6 +255,8 @@ pub fn ioctl_check_driver_compatibility(
 /// DriverError
 pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Result<(), DriverError>
     where A: serde::Serialize{
+
+    const MAX_RETRIES: usize = 20000;
     
     //
     // set up structs required for ZwCreateFile
@@ -278,31 +279,40 @@ pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Res
         SecurityQualityOfService: null_mut(),
     };
 
-    let status = unsafe { ZwCreateFile(
-        &mut file_handle,
-        GENERIC_WRITE,
-        &mut object_attributes,
-        &mut io_status,
-        null_mut(),
-        FILE_ATTRIBUTE_NORMAL,
-        FILE_SHARE_WRITE,
-        FILE_OPEN,
-        FILE_SYNCHRONOUS_IO_NONALERT,
-        null_mut(),
-        0,
-    ) };
+    let mut retries: usize = 0;
+    loop {
+        let status = unsafe { ZwCreateFile(
+            &mut file_handle,
+            GENERIC_WRITE,
+            &mut object_attributes,
+            &mut io_status,
+            null_mut(),
+            FILE_ATTRIBUTE_NORMAL,
+            FILE_SHARE_WRITE,
+            FILE_OPEN,
+            FILE_SYNCHRONOUS_IO_NONALERT,
+            null_mut(),
+            0,
+        ) };
 
-    // Check both the status return, and the io_status - check separately as io_status is unsafe
-    // and could cause safety issues if status returned an error.
-    if !nt_success(status) {
-        println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}.", status);
-        unsafe {let _ = ZwClose(file_handle);}
-        return Err(DriverError::Unknown(status.to_string()));
-    }
-    if !nt_success(unsafe {(io_status).__bindgen_anon_1.Status}) {
-        println!("[sanctum] [-] Was not successful calling ZwCreateFile.");
-        unsafe {let _ = ZwClose(file_handle);}
-        return Err(DriverError::Unknown(unsafe {(io_status).__bindgen_anon_1.Status}.to_string()));
+        if nt_success(status) {
+            break;
+        }
+
+        if retries >= MAX_RETRIES {
+            println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}. Retries: {retries}", status);
+            if !file_handle.is_null() {
+                unsafe {let _ = ZwClose(file_handle);}
+            }
+            return Err(DriverError::Unknown(format!("Was not successful calling ZwCreateFile, err: {}.", status)))
+        }
+    
+        // println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}.", status);
+        if !file_handle.is_null() {
+            unsafe {let _ = ZwClose(file_handle);}
+        }
+
+        retries += 1;
     }
 
 
@@ -322,6 +332,7 @@ pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Res
         args: args,
     };
     let command_serialised = serde_json::to_vec(&command).unwrap();
+    println!("Preparing to send: {:?}, len@ {}", command_serialised, command_serialised.len());
     let command_length = command_serialised.len() as u32;
 
     // write to the pipe
