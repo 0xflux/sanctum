@@ -1,4 +1,3 @@
-#![feature(io_error_uncategorized)]
 #![allow(dead_code)]
 
 use shared_std::{driver_manager::DriverState, file_scanner::{FileScannerState, ScanningLiveInfo}, settings::SanctumSettings};

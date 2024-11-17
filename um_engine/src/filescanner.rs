@@ -77,7 +77,7 @@ impl FileScanner {
         };
         let lines = BufReader::new(file).lines();
 
-        for line in lines.flatten() {
+        for line in lines.map_while(Result::ok) {
             bts.insert(line);
         }
 
@@ -103,7 +103,7 @@ impl FileScanner {
             return Some(sli.clone());
         } 
 
-        return None;
+        None
     }
 
 
@@ -128,12 +128,6 @@ impl FileScanner {
     }
 
 
-    /// Checks whether the scan is cancelled, returning a bool
-    // fn is_cancelled(&mut self) -> bool {
-    //     self.is_cancelled.load(Ordering::SeqCst)
-    // }
-
-
     /// Updates the internal is_scanning state to false
     pub fn end_scan(&self) {
         let mut lock = self.state.lock().unwrap();
@@ -156,7 +150,7 @@ impl FileScanner {
         // to update the hash values, this should produce the hash without requiring the whole file read into memory.
         //
 
-        let file = File::open(&target)?;
+        let file = File::open(target)?;
         let mut reader = BufReader::new(&file);
 
         let hash = {
@@ -245,11 +239,9 @@ impl FileScanner {
             discovered_dirs.push(target.clone());
         } else {
             for t in input_dirs {
-                if t.exists() {
-                    if t.is_dir() {
-                        discovered_dirs.push(t.clone());
-                        target = t;
-                    }
+                if t.exists() && t.is_dir() {
+                    discovered_dirs.push(t.clone());
+                    target = t;
                 }
             }
         }        

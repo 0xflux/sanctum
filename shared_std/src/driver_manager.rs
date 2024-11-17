@@ -1,6 +1,4 @@
 use std::mem::take;
-
-use serde_json::Value;
 use shared_no_std::driver_ipc::ProcessStarted;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -13,19 +11,10 @@ pub enum DriverState {
 
 /// A structure to hold data from kernel debug messaging for use in usermode applications.
 /// Data can be enqueued and dequeued from a vector as required.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KernelDbgMsgQueue {
     messages: Vec<String>,
     process_creations: Vec<ProcessStarted>,
-}
-
-impl Default for KernelDbgMsgQueue {
-    fn default() -> Self {
-        KernelDbgMsgQueue {
-            messages: Vec::new(),
-            process_creations: Vec::new(),
-        }
-    }
 }
 
 impl KernelDbgMsgQueue {
@@ -50,8 +39,8 @@ impl KernelDbgMsgQueue {
     }
 
     /// Push a message item to the queue
-    pub fn push_message(&mut self, item: &String) {
-        self.messages.push(item.clone());
+    pub fn push_message(&mut self, item: &str) {
+        self.messages.push(item.to_owned());
     }
 
     /// Gets and removes all data from the queue, transferring ownership to the caller without cloning.

@@ -87,7 +87,7 @@ pub async fn scanner_start_folder_scan(
                         app_handle.emit("folder_scan_error", &v).unwrap();
                     },
                     FileScannerState::Scanning => {
-                        app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
+                        app_handle.emit("folder_scan_error", "A scan is already in progress.".to_string()).unwrap()
                     },
                     _ => (),
                 }
@@ -134,7 +134,7 @@ pub async fn scanner_start_quick_scan(
                         app_handle.emit("folder_scan_error", &v).unwrap();
                     },
                     FileScannerState::Scanning => {
-                        app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
+                        app_handle.emit("folder_scan_error", "A scan is already in progress.".to_string()).unwrap()
                     },
                     _ => (),
                 }
@@ -149,5 +149,5 @@ pub async fn scanner_start_quick_scan(
 	// // total files after.
 
 	// todo this shouldn't show in every case..
-	Ok(format!("Scan in progress..."))
+	Ok("Scan in progress...".to_string())
 }

@@ -2,6 +2,7 @@
 //! * Driver
 //! * GUI
 //! * DLLs
+//! 
 //! This does not handle IOCTL's, that can be found in the driver_manager module.
 //! 
 //! This IPC module is the main event loop for the application.

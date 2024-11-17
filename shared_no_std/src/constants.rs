@@ -9,7 +9,7 @@ pub static DRIVER_UM_NAME: &str = "\\\\.\\SanctumEDR"; // \\.\ sets device names
 
 pub static SYS_INSTALL_RELATIVE_LOC: &str = "sanctum.sys";
 pub static SVC_NAME: &str = "Sanctum";
-pub static PIPE_NAME: &'static str = r"\\.\pipe\sanctum_um_engine_pipe";
+pub static PIPE_NAME: &str = r"\\.\pipe\sanctum_um_engine_pipe";
 pub static PIPE_NAME_FOR_DRIVER: &str = r"\??\pipe\sanctum_um_engine_pipe";
 
 //
@@ -26,7 +26,7 @@ pub static RELEASE_NAME: &str = "Sanctify";
 pub static VERSION_DRIVER: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 2, name: "Light's Resolve" };
 pub static VERSION_CLIENT: SanctumVersion = SanctumVersion { major: 0, minor: 0, patch: 2, name: "Light's Resolve"};
 
-impl<'a> Display for SanctumVersion<'a> {
+impl Display for SanctumVersion<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}.{}.{} - {}", self.major, self.minor, self.patch, self.name)
     }

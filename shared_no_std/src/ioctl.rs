@@ -54,3 +54,9 @@ impl SancIoctlPing<> {
         }
     }
 }
+
+impl Default for SancIoctlPing<> {
+     fn default() -> Self {
+         Self::new()
+     }
+ }

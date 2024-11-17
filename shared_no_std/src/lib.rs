@@ -1,6 +1,6 @@
 // Making the modules of the shared crate visible.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
 pub mod constants;
 pub mod ioctl;

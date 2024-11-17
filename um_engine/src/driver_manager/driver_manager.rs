@@ -1,6 +1,6 @@
 //! The main setup and more general functions for the driver manager module for the usermode engine
 
-use std::{os::windows::ffi::OsStrExt, path::PathBuf, sync::RwLock};
+use std::{os::windows::ffi::OsStrExt, path::PathBuf};
 use shared_no_std::constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC};
 use shared_std::driver_manager::{DriverState, KernelDbgMsgQueue};
 use windows::{
