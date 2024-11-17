@@ -50,13 +50,9 @@ Scanning a folder:
 
 ## Basic IOCTL
 
-The driver implements a basic IOCTL message passing from userland to the kernel driver, and responds with a response back up to userland. A basic example of this:
+The driver can be communicated with both via IOCTLs and named pipes, here is an example of data being sent from the driver back up to user land:
 
-![IOCTL example](imgs/evidence/ioctl_1.png)
-
-You can also pass structs via IOCTL as evidenced:
-
-![IOCTL structs](imgs/evidence/ioctl_2.png)
+![Rust driver IOCTL](imgs/evidence/drv_msg.png)
 
 Driver checks compatibility with the client version and will panic (usermode) and unload the driver if the versions are not compatible.
 
