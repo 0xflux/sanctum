@@ -73,7 +73,6 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
- "um_engine",
  "windows",
 ]
 
