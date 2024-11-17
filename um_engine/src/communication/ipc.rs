@@ -1,4 +1,4 @@
-//! The inter-process communciation module responsible for sending and receiving IPC requests from:
+//! The inter-process communication module responsible for sending and receiving IPC requests from:
 //! * Driver
 //! * GUI
 //! * DLLs
