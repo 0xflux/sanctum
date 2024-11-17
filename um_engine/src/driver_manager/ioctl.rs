@@ -1,3 +1,5 @@
+//! IOCTL functions for communicating with the driver from usermode.
+
 use super::driver_manager::SanctumDriverManager;
 use core::str;
 use std::{ffi::c_void, slice::from_raw_parts};

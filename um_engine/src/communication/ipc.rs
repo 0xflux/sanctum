@@ -1,3 +1,11 @@
+//! The inter-process communciation module responsible for sending and receiving IPC requests from:
+//! * Driver
+//! * GUI
+//! * DLLs
+//! This does not handle IOCTL's, that can be found in the driver_manager module.
+//! 
+//! This IPC module is the main event loop for the application.
+
 use std::{path::PathBuf, sync::Arc};
 
 use serde_json::{from_slice, to_value, to_vec, Value};

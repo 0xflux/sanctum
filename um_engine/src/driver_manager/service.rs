@@ -1,3 +1,5 @@
+//! Driver service controls
+
 use std::ptr::null_mut;
 use windows::{
     core::{Error, PCWSTR},

@@ -1,3 +1,5 @@
+//! The main setup and more general functions for the driver manager module for the usermode engine
+
 use core::str;
 use std::{os::windows::ffi::OsStrExt, path::PathBuf};
 use shared_no_std::constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC};
