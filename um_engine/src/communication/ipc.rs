@@ -33,10 +33,15 @@ impl UmIpc {
         println!("[+] Named pipe listening on {}", PIPE_NAME);
 
         loop {
+            // create the next server instance before accepting the client connection, without this
+            // there is a fraction of time where there will be no server listening
+            let next_server = ServerOptions::new().create(PIPE_NAME)?;
+
             server.connect().await?;
-    
+            
+            // move the current server instance to a client handler
             let mut client = server;
-            server = ServerOptions::new().create(PIPE_NAME)?;
+            server = next_server;
     
             let engine_clone = Arc::clone(&engine);
     
@@ -184,6 +189,23 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "ioctl_ping_driver" => {
             to_value(engine_clone.ioctl_ping_driver()).unwrap()
         },
+        "drvipc_dbg_msg" => {
+            if let Some(args) = request.args {
+                // print for console
+                let process: String = serde_json::from_value(args).unwrap();
+
+                // add the kernel message to the queue
+                engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.push_message(&process);
+            } else {
+                to_value(CommandResponse {
+                    status: "error".to_string(),
+                    message: "No path passed to scanner".to_string(),
+                }).unwrap();
+            };
+
+            // return none as we wont want to send data back, the pipe is closed.
+            return None;
+        },
         "drvipc_process_created" => {
             if let Some(args) = request.args {
                 // print for console
@@ -201,7 +223,7 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
 
             // return none as we wont want to send data back, the pipe is closed.
             return None;
-        },  
+        },
 
 
         //
