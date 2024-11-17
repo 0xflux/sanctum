@@ -1,16 +1,16 @@
 use std::{fs, path::PathBuf};
 
-use serde::{Deserialize, Serialize};
+use shared_std::settings::SanctumSettings;
 
 use crate::utils::get_logged_in_username;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct SanctumSettings {
-    pub common_scan_areas: Vec<PathBuf>,
+pub trait SanctumSettingsImpl {
+    fn load() -> Self;
+    fn update_settings(&mut self, settings: SanctumSettings) -> Self;
 }
 
-impl SanctumSettings {
-    pub fn load() -> Self {
+impl SanctumSettingsImpl for SanctumSettings {
+    fn load() -> Self {
         let username = get_logged_in_username().unwrap();
         let paths = get_setting_paths(&username);
         let dir = paths.0;
@@ -42,7 +42,7 @@ impl SanctumSettings {
 
 
     /// Update the settings fields in place
-    pub fn update_settings(&mut self, settings: SanctumSettings) -> Self{
+    fn update_settings(&mut self, settings: SanctumSettings) -> Self{
         // update self fields in memory
         self.common_scan_areas = settings.clone().common_scan_areas;
 

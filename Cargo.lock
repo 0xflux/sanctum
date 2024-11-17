@@ -69,6 +69,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared_no_std",
+ "shared_std",
  "tauri",
  "tauri-build",
  "tokio",
@@ -3047,6 +3048,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared_std"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3844,6 +3853,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared_no_std",
+ "shared_std",
  "tokio",
  "windows",
 ]

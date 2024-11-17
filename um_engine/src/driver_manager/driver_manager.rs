@@ -1,8 +1,8 @@
 //! The main setup and more general functions for the driver manager module for the usermode engine
 
-use core::str;
 use std::{os::windows::ffi::OsStrExt, path::PathBuf};
 use shared_no_std::constants::{DRIVER_UM_NAME, SANC_SYS_FILE_LOCATION, SVC_NAME, SYS_INSTALL_RELATIVE_LOC};
+use shared_std::driver_manager::DriverState;
 use windows::{
     core::PCWSTR,
     Win32::{
@@ -13,14 +13,6 @@ use windows::{
 };
 
 use crate::strings::ToUnicodeString;
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DriverState {
-    Uninstalled(String),
-    Installed(String),
-    Started(String),
-    Stopped(String),
-}
 
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name

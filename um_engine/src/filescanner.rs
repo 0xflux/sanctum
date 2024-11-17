@@ -6,26 +6,7 @@
 use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read, Write}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use md5::{Digest, Md5};
 use shared_no_std::constants::IOC_LIST_LOCATION;
-use serde::{Deserialize, Serialize};
-
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub enum ScanType {
-    File,
-    Folder,
-}
-
-pub enum ScanResult {
-    Results(Result<Vec<MatchedIOC>, io::Error>),
-    ScanInProgress,
-}
-
-
-/// Structure for containing results pertaining to an IOC match
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct MatchedIOC {
-    pub hash: String,
-    pub file: PathBuf,
-}
+use shared_std::file_scanner::{FileScannerState, MatchedIOC, ScanningLiveInfo};
 
 
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
@@ -43,29 +24,13 @@ pub struct FileScanner {
     pub scanning_info: Arc<Mutex<ScanningLiveInfo>>,
 }
 
-
-/// The state of the scanner either Scanning or Inactive. If the scanner is scanning, then it contains
-/// further information about the live-time information such as how many files have been scanned and time taken so far.
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub enum FileScannerState {
-    Scanning,
-    Finished,
-    FinishedWithError(String),
-    Inactive,
-    Cancelled,
+trait SLI {
+    fn new() -> Self;
+    fn reset(&mut self);
 }
 
-
-/// Live time information about the current scan
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-pub struct ScanningLiveInfo {
-    pub num_files_scanned: u128,
-    pub time_taken: Duration,
-    pub scan_results: Vec<MatchedIOC>,
-}
-
-impl ScanningLiveInfo {
-    pub fn new() -> Self {
+impl SLI for ScanningLiveInfo {
+    fn new() -> Self {
         ScanningLiveInfo {
             num_files_scanned: 0,
             time_taken: Duration::new(0, 0),

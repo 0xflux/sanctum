@@ -1,6 +1,7 @@
 //! Driver service controls
 
 use std::ptr::null_mut;
+use shared_std::driver_manager::DriverState;
 use windows::{
     core::{Error, PCWSTR},
     Win32::{
@@ -24,7 +25,7 @@ use windows::{
 
 use crate::driver_manager::DriverHandleRaii;
 
-use super::driver_manager::{DriverState, SanctumDriverManager};
+use super::driver_manager::SanctumDriverManager;
 impl SanctumDriverManager {
     /// Command for the driver manager to install the driver on the target device.
     ///

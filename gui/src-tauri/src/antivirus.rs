@@ -2,9 +2,9 @@
 //! This module will handle state, requests, async, and events.
 
 use serde_json::{to_value, Value};
+use shared_std::file_scanner::{FileScannerState, ScanningLiveInfo};
 use tauri::Emitter;
 use std::path::PathBuf;
-use um_engine::{FileScannerState, ScanningLiveInfo};
 
 use crate::ipc::IpcClient;
 
@@ -73,7 +73,7 @@ pub async fn scanner_start_folder_scan(
         match IpcClient::send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(path)).await {
             Ok(response) => {
                 match response {
-                    um_engine::FileScannerState::Finished => {
+                    FileScannerState::Finished => {
         
                         let scan_result = IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
         
@@ -83,10 +83,10 @@ pub async fn scanner_start_folder_scan(
                             app_handle.emit("folder_scan_malware_found", &scan_result).unwrap();
                         }
                     },
-                    um_engine::FileScannerState::FinishedWithError(v) => {
+                    FileScannerState::FinishedWithError(v) => {
                         app_handle.emit("folder_scan_error", &v).unwrap();
                     },
-                    um_engine::FileScannerState::Scanning => {
+                    FileScannerState::Scanning => {
                         app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
                     },
                     _ => (),
@@ -120,7 +120,7 @@ pub async fn scanner_start_quick_scan(
 		match IpcClient::send_ipc::<FileScannerState, _>("scanner_start_folder_scan", Some(paths)).await {
             Ok(response) => {
                 match response {
-                    um_engine::FileScannerState::Finished => {
+                    FileScannerState::Finished => {
         
                         let scan_result = IpcClient::send_ipc::<ScanningLiveInfo, Option<Value>>("scanner_get_scan_stats", None).await.unwrap();
         
@@ -130,10 +130,10 @@ pub async fn scanner_start_quick_scan(
                             app_handle.emit("folder_scan_malware_found", &scan_result).unwrap();
                         }
                     },
-                    um_engine::FileScannerState::FinishedWithError(v) => {
+                    FileScannerState::FinishedWithError(v) => {
                         app_handle.emit("folder_scan_error", &v).unwrap();
                     },
-                    um_engine::FileScannerState::Scanning => {
+                    FileScannerState::Scanning => {
                         app_handle.emit("folder_scan_error", format!("A scan is already in progress.")).unwrap()
                     },
                     _ => (),

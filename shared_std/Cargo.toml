@@ -1,0 +1,8 @@
+[package]
+name = "shared_std"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.215", default-features = false }
+serde_json = {version = "1.0.133", default-features = false }
