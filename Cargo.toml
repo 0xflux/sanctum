@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["shared_no_std","um_engine", "gui\\src-tauri", "shared_std"]
+members = ["shared_no_std","um_engine", "gui\\src-tauri"]
 exclude = ["driver"]
