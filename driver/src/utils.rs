@@ -7,9 +7,12 @@ use wdk_sys::{ntddk::RtlUnicodeStringToAnsiString, FALSE, STATUS_SUCCESS, STRING
 /// A custom error enum for the Sanctum driver
 pub enum DriverError {
     NullPtr,
+    DriverMessagePtrNull,
     LengthTooLarge,
     CouldNotDecodeUnicode,
     CouldNotEncodeUnicode,
+    CouldNotSerialize,
+    NoDataToSend,
     Unknown(String),
 }
 

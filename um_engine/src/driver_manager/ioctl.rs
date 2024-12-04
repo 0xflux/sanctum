@@ -2,10 +2,10 @@
 
 use super::driver_manager::SanctumDriverManager;
 use core::str;
-use std::{ffi::c_void, slice::from_raw_parts};
+use std::{ffi::c_void, mem::zeroed, slice::from_raw_parts, str::from_utf8};
 use shared_no_std::{
     constants::VERSION_CLIENT,
-    ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
+    ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
 use windows::Win32::System::IO::DeviceIoControl;
 
@@ -62,8 +62,6 @@ impl SanctumDriverManager {
             eprintln!("[-] Error fetching version result from driver. Zero bytes returned from the driver.");
             return false;
         }
-
-        println!("[i] Response is: {}", response);
 
         response
     }
@@ -132,6 +130,91 @@ impl SanctumDriverManager {
         } else {
             println!("[-] Error parsing response as UTF-8");
             return "".to_string();
+        }
+    }
+
+
+    /// Pings the driver with a struct as its message
+    pub fn ioctl_get_driver_messages(&mut self) {
+        // todo improve how the error handling happens..
+        if self.handle_via_path.handle.is_none() {
+            // try 1 more time
+            self.init_handle_via_registry();
+            if self.handle_via_path.handle.is_none() {
+                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                    Unable to pass IOCTL. Handle: {:?}", 
+                    self.handle_via_path.handle
+                );
+                return;
+            }
+        }
+
+        // todo this will possibly quickly grow so it should recursively keep draining the messages from the kernel until
+        // it has enough space, or to do this another way? maybe a pre-check to get the size before allocating?
+        // the driver could store the data into a temp buffer until the next call which will then send the data of size x,
+        // when it stores into the temp buffer it can reset the 'live' vec in the driver?
+
+        let mut size_of_kernel_msg: usize = 0;
+        let mut bytes_returned: u32 = 0;
+
+        let result = unsafe {
+            DeviceIoControl(
+                self.handle_via_path.handle.unwrap(),
+                SANC_IOCTL_DRIVER_GET_MESSAGE_LEN,
+                None,
+                0u32,
+                Some(&mut size_of_kernel_msg as *mut _ as *mut _),
+                size_of::<usize>() as u32,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+        if let Err(e) = result {
+            eprintln!("[-] Error with calling SANC_IOCTL_DRIVER_GET_MESSAGE_LEN. {e}. Size of kernel msg: {}", size_of_kernel_msg);
+            return;
+        }
+
+        if size_of_kernel_msg == 0 {
+            return;
+        }
+
+        println!("[i] Got size of kernel msg: {}", size_of_kernel_msg);
+
+        let mut response: Vec<u8> = vec![0; size_of_kernel_msg];
+        let mut bytes_returned: u32 = 0;
+
+        // attempt the call
+        let result = unsafe {
+            DeviceIoControl(
+                self.handle_via_path.handle.unwrap(),
+                SANC_IOCTL_DRIVER_GET_MESSAGES,
+                None,
+                0u32,
+                Some(response.as_mut_ptr() as *mut _),
+                size_of_kernel_msg as u32,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+
+        if let Err(e) = result {
+            eprintln!("[-] Error from attempting IOCTL call. {e}");
+            return;
+        } else {
+            println!("SUCCESSFUL SUCCESSFUL response: {:?}, Response len: {}, size: {}", response, response.len(), bytes_returned);
+        }
+
+        // parse out the result
+        if bytes_returned == 0 {
+            eprintln!("[-] No bytes returned from DeviceIOControl");
+            return;
+        }
+
+        match serde_json::to_string(&response) {
+            Ok(v) => {
+                println!("[i] Got data: {}", v);
+            },
+            Err(e) => eprintln!("[-] Could not process data: {e}"),
         }
     }
 

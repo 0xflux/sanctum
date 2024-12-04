@@ -11,29 +11,31 @@ extern crate alloc;
 extern crate wdk_panic;
 
 use core::core_callback_notify_ps;
-use ::core::ptr::null_mut;
+use ::core::{ptr::null_mut, sync::atomic::{AtomicPtr, Ordering}};
 
-use alloc::{format, string::ToString};
+use alloc::{boxed::Box, format};
 use ffi::IoGetCurrentIrpStackLocation;
-use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_ping, ioctl_handler_ping_return_struct, send_msg_via_named_pipe};
-use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
+use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, ioctl_handler_send_kernel_msgs_to_userland, DriverMessagesCache, DriverMessagesWithMutex};
+use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
-#[cfg(not(test))]
-use wdk_alloc::WdkAllocator;
+use wdk_sys::{
+    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, PsSetCreateProcessNotifyRoutineEx}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FALSE, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, TRUE, _IO_STACK_LOCATION
+};
 
 mod ffi;
 mod utils;
 mod device_comms;
 mod core;
 
-use wdk_sys::{
-    ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, PsSetCreateProcessNotifyRoutineEx}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FALSE, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, TRUE, _IO_STACK_LOCATION
-};
-
-#[cfg(not(test))]
+use wdk_alloc::WdkAllocator;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WdkAllocator = WdkAllocator;
+
+/// An atomic pointer to the DriverMessagesWithSpinLock struct so that it can be used anywhere in the 
+/// kernel.
+static DRIVER_MESSAGES: AtomicPtr<DriverMessagesWithMutex> = AtomicPtr::new(null_mut());
+static DRIVER_MESSAGES_CACHE: AtomicPtr<DriverMessagesCache> = AtomicPtr::new(null_mut());
 
 /// DriverEntry is required to start the driver, and acts as the main entrypoint
 /// for our driver.
@@ -43,7 +45,6 @@ pub unsafe extern "system" fn driver_entry(
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] Starting Sanctum driver... Version: {}", VERSION_DRIVER);
-    let _ = send_msg_via_named_pipe("drvipc_dbg_msg", Some(&format!("Starting Sanctum driver... Version: {}", VERSION_DRIVER)));
 
     let status = configure_driver(driver, registry_path as *mut _);
 
@@ -58,6 +59,26 @@ pub unsafe extern "C" fn configure_driver(
     _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] running sanctum_entry...");
+
+    //
+    // Initialise the global DRIVER_MESSAGES variable
+    //
+    let messages = Box::new(DriverMessagesWithMutex::new());
+    let messages_cache = Box::new(DriverMessagesCache::new());
+    // take ownership of the pointer to the messages struct; the pointer shouldn't change as the 
+    // struct contains a pointer to the vec, that is allowed to change.
+    DRIVER_MESSAGES.store(Box::into_raw(messages), Ordering::SeqCst);
+    DRIVER_MESSAGES_CACHE.store(Box::into_raw(messages_cache), Ordering::SeqCst);
+
+
+    // Attempt to dereference the DRIVER_MESSAGES global; if the dereference is successful,
+    // add the relevant data to the queue
+    if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
+        let obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
+        obj.add_message_to_queue(format!("Starting Sanctum driver... Version: {}", VERSION_DRIVER));
+    } else {
+        println!("[sanctum] [-] Driver messages is null");
+    }
 
     //
     // Configure the strings
@@ -156,6 +177,15 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
         println!("[sanctum] [-] Error removing PsSetCreateProcessNotifyRoutineEx from callback routines. Error: {res}");
     }
 
+    // drop the driver messages
+    let ptr = DRIVER_MESSAGES.swap(null_mut(), Ordering::SeqCst);
+    if !ptr.is_null() {
+        // allow rust to clean up the memory
+        unsafe {
+            let _ = Box::from_raw(ptr);
+        }
+    }
+
     // delete the device
     unsafe { IoDeleteDevice((*driver).DeviceObject);}
 
@@ -190,8 +220,6 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
         return STATUS_UNSUCCESSFUL;
     }
 
-    println!("[sanctum] [+] Found the stack location! {:p}", p_stack_location);
-
     let control_code = (*p_stack_location).Parameters.DeviceIoControl.IoControlCode; // IOCTL code
 
     // process the IOCTL based on its code, note that the functions implementing IOCTL's should
@@ -225,7 +253,22 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
             } else {
                 STATUS_SUCCESS
             }
-        },
+        }
+        SANC_IOCTL_DRIVER_GET_MESSAGE_LEN => {
+            if let Err(_) = ioctl_handler_get_kernel_msg_len(pirp){
+                STATUS_UNSUCCESSFUL
+            } else {
+                STATUS_SUCCESS
+            }
+        }
+        SANC_IOCTL_DRIVER_GET_MESSAGES => {
+            // if let Err(e) = ioctl_handler_send_kernel_msgs_to_userland(pirp){
+            //     STATUS_UNSUCCESSFUL
+            // } else {
+            //     STATUS_SUCCESS
+            // }
+            STATUS_SUCCESS
+        }
 
         _ => {
             println!("[sanctum] [-] IOCTL control code: {} not implemented.", control_code);

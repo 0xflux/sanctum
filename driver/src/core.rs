@@ -2,11 +2,14 @@
 // ************************** CORE CALLBACKS ************************** //
 // ******************************************************************** //
 
-use alloc::{format, string::ToString};
+use core::sync::atomic::Ordering;
+
+use alloc::format;
 use shared_no_std::driver_ipc::ProcessStarted;
+use wdk::println;
 use wdk_sys::{HANDLE, PEPROCESS, PS_CREATE_NOTIFY_INFO};
 
-use crate::{device_comms::send_msg_via_named_pipe, utils::unicode_to_string};
+use crate::{utils::unicode_to_string, DRIVER_MESSAGES};
 
 /// Callback function for a new process being created on the system.
 pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE, created: *mut PS_CREATE_NOTIFY_INFO) {
@@ -29,8 +32,16 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
         };
 
         // println!("[sanctum] [i] Process started: {:?}.", process_started);
-        let _ = send_msg_via_named_pipe("drvipc_dbg_msg", Some(&"Sending process creation info...".to_string()));
-        let _ = send_msg_via_named_pipe("drvipc_process_created", Some(&process_started));
+        
+        
+        // Attempt to dereference the DRIVER_MESSAGES global; if the dereference is successful,
+        // add the relevant data to the queue
+        if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
+            let obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
+            obj.add_process_creation_to_queue(process_started);
+        } else {
+            println!("[sanctum] [-] Driver messages is null");
+        };
         
     } else {
         // todo

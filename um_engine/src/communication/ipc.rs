@@ -33,6 +33,17 @@ impl UmIpc {
         println!("[+] Named pipe listening on {}", PIPE_NAME);
 
         loop {
+
+            //
+            // Check any driver messages, before usermode pipe msgs
+            //
+
+            engine.driver_manager.lock().unwrap().ioctl_get_driver_messages();
+
+            //
+            // Now check for pipe message
+            //
+
             // create the next server instance before accepting the client connection, without this
             // there is a fraction of time where there will be no server listening
             let next_server = ServerOptions::new().create(PIPE_NAME)?;

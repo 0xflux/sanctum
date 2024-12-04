@@ -14,6 +14,8 @@
         "iocs",
         "IOCTLS",
         "Irql",
+        "KMUTEX",
+        "KSPIN",
         "libcore",
         "NONALERT",
         "ntddk",

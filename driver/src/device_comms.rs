@@ -1,11 +1,185 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::{ffi::c_void, mem, ptr::null_mut, sync::atomic::Ordering};
 
-use alloc::{format, string::ToString};
-use serde_json::to_value;
-use shared_no_std::{constants::{SanctumVersion, PIPE_NAME_FOR_DRIVER}, ioctl::SancIoctlPing, ipc::CommandRequest};
-use wdk::{nt_success, println};
-use wdk_sys::{ntddk::{KeDelayExecutionThread, RtlCopyMemoryNonTemporal, ZwClose, ZwCreateFile, ZwWriteFile}, FALSE, FILE_ATTRIBUTE_NORMAL, FILE_OPEN, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, HANDLE, IO_STATUS_BLOCK, LARGE_INTEGER, NTSTATUS, OBJECT_ATTRIBUTES, PIRP, PLARGE_INTEGER, STATUS_BUFFER_ALL_ZEROS, STATUS_BUFFER_TOO_SMALL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION, _MODE::KernelMode};
-use crate::utils::{check_driver_version, DriverError, ToUnicodeString};
+use alloc::{string::{String, ToString}, vec::Vec};
+use serde::Serialize;
+use serde_json::Value;
+use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::SancIoctlPing};
+use wdk::println;
+use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, LARGE_INTEGER, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
+
+/// DriverMessages object which contains a spinlock to allow for mutable access to the queue.
+pub struct DriverMessagesWithMutex {
+    lock: FAST_MUTEX,
+    is_empty: bool,
+    messages: Vec<String>,
+    process_creations: Vec<ProcessStarted>,
+}
+
+#[derive(Serialize)]
+pub struct DriverMessagesCache {
+    messages: Vec<String>,
+    process_creations: Vec<ProcessStarted>,
+}
+
+impl DriverMessagesCache {
+    pub fn new() -> Self {
+        DriverMessagesCache::default()
+    }
+
+
+    /// Adds an existing Vec<Value> queue to the current object
+    /// 
+    /// # Returns
+    /// 
+    /// This function returns the length of the queue
+    fn add_existing_queue(&mut self, q: &mut DriverMessagesWithMutex) -> usize {
+
+        self.messages.append(&mut q.messages);
+        self.process_creations.append(&mut q.process_creations);
+
+        let tmp = serde_json::to_string(&DriverMessagesCache{
+            messages: self.messages.clone(),
+            process_creations: self.process_creations.clone(),
+        });
+
+        let len = match tmp {
+            Ok(v) => v.len(),
+            Err(e) => {
+                println!("[sanctum] [-] Error serializing temp object for len. {e}.");
+                return 0;
+            },
+        };
+
+        len
+    }
+
+    /// Extract all data out of the queue if there is data.
+    /// 
+    /// # Returns
+    /// 
+    /// The function will return None if the queue was empty.
+    fn extract_all(&mut self) -> Option<DriverMessagesCache> {
+        
+        let data = mem::take(self);
+
+        Some(data)
+    }
+}
+
+impl Default for DriverMessagesCache {
+    fn default() -> Self {
+        DriverMessagesCache { messages: Vec::new(), process_creations: Vec::new() }
+    }
+}
+
+impl Default for DriverMessagesWithMutex {
+    fn default() -> Self {
+        let mut mutex = FAST_MUTEX::default();
+        unsafe { ExInitializeFastMutex(&mut mutex) };
+        DriverMessagesWithMutex { lock: mutex, is_empty: true, messages: Vec::new(), process_creations: Vec::new() }
+    }
+}
+
+impl DriverMessagesWithMutex {
+    pub fn new() -> Self {
+        DriverMessagesWithMutex::default()
+    }
+
+    /// Adds a print msg to the queue.
+    /// 
+    /// This function will wait for an acquisition of the spin lock to continue and will block
+    /// until that point.
+    pub fn add_message_to_queue(&mut self, data: String)
+     {
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql != 0 {
+            println!("[sanctum] [-] IRQL is not PASSIVE_LEVEL: {}", irql);
+            return;
+        }
+
+        unsafe { ExAcquireFastMutex(&mut self.lock) };
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql > APC_LEVEL as u8 {
+            println!("[sanctum] [-] IRQL is not APIC_LEVEL: {}", irql);
+            unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+            return;
+        }
+
+        self.is_empty = false;
+        self.messages.push(data);
+
+        unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+    }
+
+
+    /// Adds serialised data to the message queue.
+    /// 
+    /// This function will wait for an acquisition of the spin lock to continue and will block
+    /// until that point.
+    pub fn add_process_creation_to_queue(&mut self, data: ProcessStarted)
+     {
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql != 0 {
+            println!("[sanctum] [-] IRQL is not PASSIVE_LEVEL: {}", irql);
+            return;
+        }
+
+        unsafe { ExAcquireFastMutex(&mut self.lock) };
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql > APC_LEVEL as u8 {
+            println!("[sanctum] [-] IRQL is not APIC_LEVEL: {}", irql);
+            unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+            return;
+        }
+
+        self.is_empty = false;
+        self.process_creations.push(data);
+        
+        unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+    }
+
+
+    /// Extract all data out of the queue if there is data.
+    /// 
+    /// # Returns
+    /// 
+    /// The function will return None if the queue was empty.
+    fn extract_all(&mut self) -> Option<DriverMessagesWithMutex> {
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql != 0 {
+            println!("[sanctum] [-] IRQL is not PASSIVE_LEVEL: {}", irql);
+            return None;
+        }
+
+        unsafe { ExAcquireFastMutex(&mut self.lock) };
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql > APC_LEVEL as u8 {
+            println!("[sanctum] [-] IRQL is not APIC_LEVEL: {}", irql);
+            unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+            return None;
+        }
+
+        if self.is_empty {
+            unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+            return None;
+        }
+        
+        let data = mem::take(self);
+        self.is_empty = true;
+
+        unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+
+        Some(data)
+    }
+
+}
 
 struct IoctlBuffer {
     len: u32,
@@ -68,10 +242,10 @@ impl IoctlBuffer {
     
         // length of in buffer
         let input_len: u32 = unsafe {(*self.p_stack_location).Parameters.DeviceIoControl.InputBufferLength};
-        if input_len == 0 { 
-            println!("[sanctum] [-] IOCTL PING input length invalid.");
-            return Err(STATUS_BUFFER_TOO_SMALL) 
-        };
+        // if input_len == 0 { 
+        //     println!("[sanctum] [-] IOCTL PING input length invalid.");
+        //     return Err(STATUS_BUFFER_TOO_SMALL) 
+        // };
     
         // For METHOD_BUFFERED, the driver should use the buffer pointed to by Irp->AssociatedIrp.SystemBuffer as the output buffer.
         let input_buffer: *mut c_void = unsafe {(*self.pirp).AssociatedIrp.SystemBuffer};
@@ -149,6 +323,124 @@ pub fn ioctl_handler_ping(
     Ok(())
 }
 
+/// Get the response size of the message we need to send back to the usermode application.
+/// This function will also shift the kernel message queue into a temp (global) object which will
+/// retain the size, resetting the live queue.
+pub fn ioctl_handler_get_kernel_msg_len(
+    pirp: PIRP,
+) -> Result<(), DriverError> {
+
+    unsafe { 
+        if (*pirp).AssociatedIrp.SystemBuffer.is_null() {
+            println!("[sanctum] [-] SystemBuffer is a null pointer.");
+            return Err(DriverError::NullPtr);
+        }
+    }
+
+    let len_of_response = if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
+        let og_obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
+        println!("GOT THE OBJ! {}", og_obj.is_empty); // false
+
+        // todo the bluescreen could be the mem operation below
+        // let drained = og_obj.extract_all();
+        // if drained.is_none() {
+        //     println!("[sanctum] [-] Drained is none");
+        //     return Err(DriverError::NoDataToSend);
+        // }
+
+        // println!("[sanctum] [+] Drained not none!");
+        
+        // //
+        // // At this point, the transferred data form the queue has data in. Now try obtain a valid reference to
+        // // the driver message cache global
+        // //
+
+        // if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
+        //     let driver_message_cache = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
+        //     driver_message_cache.add_existing_queue(&mut drained.unwrap())
+        // } else {
+        //     println!("[sanctum] [-] Driver messages is null");
+        //     return Err(DriverError::DriverMessagePtrNull);
+        // }
+    } else {
+        println!("[sanctum] [-] Invalid pointer");
+        return Err(DriverError::DriverMessagePtrNull);
+    };
+
+
+    // if len_of_response == 0 {
+    //     return Err(DriverError::NoDataToSend);
+    // }
+
+    // unsafe {(*pirp).IoStatus.Information = mem::size_of::<usize>() as u64};
+
+    // // copy the memory into the buffer
+    // unsafe {
+    //     RtlCopyMemoryNonTemporal(
+    //         (*pirp).AssociatedIrp.SystemBuffer, 
+    //         &len_of_response as *const _ as *const _, 
+    //         mem::size_of::<usize>() as u64
+    //     )
+    // };
+
+    // println!("[i] Sent data for size of DRIVER_MESSAGES_CACHE: {}", len_of_response);
+
+    Ok(())
+}
+
+/// Send any kernel messages in the DriverMessages struct back to userland.
+pub fn ioctl_handler_send_kernel_msgs_to_userland(
+    pirp: PIRP,
+) -> Result<(), DriverError> {
+
+    unsafe { 
+        if (*pirp).AssociatedIrp.SystemBuffer.is_null() {
+            println!("[sanctum] [-] SystemBuffer is a null pointer.");
+            return Err(DriverError::NullPtr);
+        }
+    }
+
+    // Attempt to dereference the DRIVER_MESSAGES global; if the dereference is successful,
+    // make a call to extract_all to get all data from the message queue.
+    let data = if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
+        let obj = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
+        obj.extract_all()
+    } else {
+        println!("[sanctum] [-] Invalid pointer");
+        return Err(DriverError::DriverMessagePtrNull);
+    };
+
+    if data.is_none() {
+        return Err(DriverError::NoDataToSend);
+    }
+
+    println!("[sanctum] [i] EXTRACTED DATA FROM CACHE!!!!!!!");
+
+    let encoded_data = match serde_json::to_string(&data.unwrap()) {
+        Ok(v) => v,
+        Err(_) => {
+            println!("[sanctum] [-] Error serializing data to string in ioctl_handler_send_kernel_msgs_to_userland");
+            return Err(DriverError::CouldNotSerialize);
+        },
+    };
+
+    let size_of_struct = encoded_data.len() as u64;
+    unsafe {(*pirp).IoStatus.Information = size_of_struct};
+
+    // copy the memory into the buffer
+    unsafe {
+        RtlCopyMemoryNonTemporal(
+            (*pirp).AssociatedIrp.SystemBuffer, 
+            &encoded_data as *const _ as *const c_void, 
+            size_of_struct
+        )
+    };
+
+    println!("[i] Sent data from DRIVER_MESSAGES_CACHE: {}", encoded_data);
+
+    Ok(())
+}
+
 
 pub fn ioctl_handler_ping_return_struct(
     p_stack_location: *mut _IO_STACK_LOCATION,
@@ -161,6 +453,7 @@ pub fn ioctl_handler_ping_return_struct(
     let input_data = ioctl_buffer.buf as *mut c_void as *mut SancIoctlPing;
     if input_data.is_null() {
         println!("[sanctum] [-] Input struct data in IOCTL PING with struct was null.");
+        return Err(STATUS_INVALID_BUFFER_SIZE);
     }
 
     let input_data = unsafe { &(*input_data) };
@@ -237,133 +530,6 @@ pub fn ioctl_check_driver_compatibility(
     unsafe {
         RtlCopyMemoryNonTemporal((*pirp).AssociatedIrp.SystemBuffer, &response as *const bool as *const c_void, res_size);
     }
-
-    Ok(())
-}
-
-/// Send a message to the usermode engine via its named pipe.
-/// 
-/// # Args
-/// 
-/// * 'named_pipe_msg' - A string slice of the receiving named_pipe_msg which will be matched on in the receiving pipe application, 
-/// typically should be prefixed with: drvipc_. For example: drvipc_process_created.
-/// 
-/// * 'args' - Optional generic type accepting a Struct which must be serialisable, which will be sent to the receiving IPC channel.
-/// 
-/// # Returns
-/// 
-/// DriverError
-pub fn send_msg_via_named_pipe<A>(named_pipe_msg: &str, args: Option<&A>) -> Result<(), DriverError>
-    where A: serde::Serialize{
-
-    const MAX_RETRIES: usize = 20000;
-    
-    //
-    // set up structs required for ZwCreateFile
-    //
-    let mut file_handle: HANDLE = null_mut();
-    let mut pipe_name = match PIPE_NAME_FOR_DRIVER.to_unicode_string() {
-        Some(s) => s,
-        None => {
-            return Err(DriverError::CouldNotEncodeUnicode)
-        },
-    };
-    let mut io_status = IO_STATUS_BLOCK::default();
-
-    let mut object_attributes = OBJECT_ATTRIBUTES {
-        Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
-        RootDirectory: null_mut(),
-        ObjectName: &mut pipe_name,
-        Attributes: 0,
-        SecurityDescriptor: null_mut(),
-        SecurityQualityOfService: null_mut(),
-    };
-
-    let mut retries: usize = 0;
-    loop {
-        let status = unsafe { ZwCreateFile(
-            &mut file_handle,
-            GENERIC_WRITE,
-            &mut object_attributes,
-            &mut io_status,
-            null_mut(),
-            FILE_ATTRIBUTE_NORMAL,
-            FILE_SHARE_WRITE,
-            FILE_OPEN,
-            FILE_SYNCHRONOUS_IO_NONALERT,
-            null_mut(),
-            0,
-        ) };
-
-        if nt_success(status) {
-            break;
-        }
-
-        if retries >= MAX_RETRIES {
-            println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}. Retries: {retries}", status);
-            if !file_handle.is_null() {
-                unsafe {let _ = ZwClose(file_handle);}
-            }
-            return Err(DriverError::Unknown(format!("Was not successful calling ZwCreateFile, err: {}.", status)))
-        }
-    
-        // println!("[sanctum] [-] Was not successful calling ZwCreateFile, err: {}.", status);
-        if !file_handle.is_null() {
-            unsafe {let _ = ZwClose(file_handle);}
-        }
-
-        retries += 1;
-    }
-
-
-    //
-    // We now have a handle to the pipe, so write to the file
-    //
-
-    // serialise the args
-    let args = match args {
-        Some(a) => Some(to_value(a).unwrap()),
-        None => None,
-    };
-
-    // construct the command
-    let command = CommandRequest {
-        command: named_pipe_msg.to_string(),
-        args: args,
-    };
-
-    // todo BUG - this caps at 1024 bytes?
-    let command_serialised = serde_json::to_vec(&command).unwrap();
-    // println!("Preparing to send: {:?}, len@ {}", command_serialised, command_serialised.len());
-    let command_length = command_serialised.len() as u32;
-
-    // write to the pipe
-    let status = unsafe { ZwWriteFile(
-        file_handle, 
-        null_mut(), 
-        None, 
-        null_mut(), 
-        &mut io_status, 
-        command_serialised.as_ptr() as *const _ as *mut _ ,
-        command_length,
-        null_mut(),
-        null_mut(),
-    ) };
-
-    // Check both the status return, and the io_status - check separately as io_status is unsafe
-    // and could cause safety issues if status returned an error.
-    if !nt_success(status) {
-        println!("[sanctum] [-] Was not successful calling ZwWriteFile, err: {}.", status);
-        unsafe {let _ = ZwClose(file_handle);}
-        return Err(DriverError::Unknown(status.to_string()));
-    }
-    if !nt_success(unsafe {(io_status).__bindgen_anon_1.Status}) {
-        println!("[sanctum] [-] Was not successful calling ZwWriteFile. Err: {}", unsafe {(io_status).__bindgen_anon_1.Status});
-        unsafe {let _ = ZwClose(file_handle);}
-        return Err(DriverError::Unknown(unsafe {(io_status).__bindgen_anon_1.Status}.to_string()));
-    }
-
-    unsafe {let _ = ZwClose(file_handle);}
 
     Ok(())
 }

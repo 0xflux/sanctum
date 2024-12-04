@@ -1,13 +1,11 @@
 // FFI for functions not yet implemented in the Rust Windows Driver project
 
-use core::ffi::c_void;
+use wdk_sys::{ntddk::KeInitializeEvent, FALSE, FAST_MUTEX, FM_LOCK_BIT, PIO_STACK_LOCATION, PIRP, _EVENT_TYPE::SynchronizationEvent};
 
-use wdk_sys::{HANDLE, PIO_STACK_LOCATION, PIRP, POBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, PUNICODE_STRING};
-
-#[link(name = "ntoskrnl")]
-extern "system" {
-    // pub fn RtlCopyMemory(dest: *mut u64, source: *mut u64, length: usize);
-}
+// #[link(name = "ntoskrnl")]
+// extern "system" {
+//     pub fn ExInitializeFastMutex(mutex: PFAST_MUTEX);
+// }
 
 pub unsafe fn IoGetCurrentIrpStackLocation(irp: PIRP) -> PIO_STACK_LOCATION {
     assert!((*irp).CurrentLocation <= (*irp).StackCount + 1); // todo maybe do error handling instead of an assert?
@@ -17,4 +15,13 @@ pub unsafe fn IoGetCurrentIrpStackLocation(irp: PIRP) -> PIO_STACK_LOCATION {
         .__bindgen_anon_2
         .__bindgen_anon_1
         .CurrentStackLocation
+}
+
+#[allow(non_snake_case)]
+pub unsafe fn ExInitializeFastMutex(kmutex: *mut FAST_MUTEX) {
+    core::ptr::write_volatile(&mut (*kmutex).Count, FM_LOCK_BIT as i32);
+
+    (*kmutex).Owner = core::ptr::null_mut();
+    (*kmutex).Contention = 0;
+    KeInitializeEvent(&mut (*kmutex).Event, SynchronizationEvent, FALSE as _)
 }
