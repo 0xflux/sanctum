@@ -15,7 +15,7 @@ use ::core::{ptr::null_mut, sync::atomic::{AtomicPtr, Ordering}};
 
 use alloc::{boxed::Box, format};
 use ffi::IoGetCurrentIrpStackLocation;
-use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, ioctl_handler_send_kernel_msgs_to_userland, DriverMessagesCache, DriverMessagesWithMutex};
+use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, DriverMessagesWithMutex};
 use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
@@ -35,7 +35,7 @@ static GLOBAL_ALLOCATOR: WdkAllocator = WdkAllocator;
 /// An atomic pointer to the DriverMessagesWithSpinLock struct so that it can be used anywhere in the 
 /// kernel.
 static DRIVER_MESSAGES: AtomicPtr<DriverMessagesWithMutex> = AtomicPtr::new(null_mut());
-static DRIVER_MESSAGES_CACHE: AtomicPtr<DriverMessagesCache> = AtomicPtr::new(null_mut());
+static DRIVER_MESSAGES_CACHE: AtomicPtr<DriverMessagesWithMutex> = AtomicPtr::new(null_mut());
 
 /// DriverEntry is required to start the driver, and acts as the main entrypoint
 /// for our driver.
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn configure_driver(
     // Initialise the global DRIVER_MESSAGES variable
     //
     let messages = Box::new(DriverMessagesWithMutex::new());
-    let messages_cache = Box::new(DriverMessagesCache::new());
+    let messages_cache = Box::new(DriverMessagesWithMutex::new());
     // take ownership of the pointer to the messages struct; the pointer shouldn't change as the 
     // struct contains a pointer to the vec, that is allowed to change.
     DRIVER_MESSAGES.store(Box::into_raw(messages), Ordering::SeqCst);

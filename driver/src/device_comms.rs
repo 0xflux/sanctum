@@ -1,83 +1,92 @@
 use core::{ffi::c_void, mem, ptr::null_mut, sync::atomic::Ordering};
 
-use alloc::{string::{String, ToString}, vec::Vec};
-use serde::Serialize;
-use serde_json::Value;
+use alloc::{string::String, vec::Vec};
+use serde::{Deserialize, Serialize};
 use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::SancIoctlPing};
 use wdk::println;
-use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, LARGE_INTEGER, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
+use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
 use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
 
-/// DriverMessages object which contains a spinlock to allow for mutable access to the queue.
+/// DriverMessagesWithMutex object which contains a spinlock to allow for mutable access to the queue.
+/// This object should be used to safely manage access to the inner DriverMessages which contains 
+/// the actual data. The DriverMessagesWithMutex contains metadata + the DriverMessages.
 pub struct DriverMessagesWithMutex {
     lock: FAST_MUTEX,
     is_empty: bool,
+    data: DriverMessages,
+}
+
+/// The actual type within DriverMessagesWithMutex which contains the data.
+#[derive(Serialize, Deserialize, Default, Debug)]
+struct DriverMessages {
     messages: Vec<String>,
     process_creations: Vec<ProcessStarted>,
 }
 
-#[derive(Serialize)]
-pub struct DriverMessagesCache {
-    messages: Vec<String>,
-    process_creations: Vec<ProcessStarted>,
-}
+// #[derive(Serialize, Deserialize)]
+// pub struct DriverMessagesCache {
+//     data: DriverMessages,
+// }
 
-impl DriverMessagesCache {
-    pub fn new() -> Self {
-        DriverMessagesCache::default()
-    }
+// impl DriverMessagesCache {
+//     pub fn new() -> Self {
+//         DriverMessagesCache::default()
+//     }
 
 
-    /// Adds an existing Vec<Value> queue to the current object
-    /// 
-    /// # Returns
-    /// 
-    /// This function returns the length of the queue
-    fn add_existing_queue(&mut self, q: &mut DriverMessagesWithMutex) -> usize {
+//     /// Adds an existing Vec<Value> queue to the current object
+//     /// 
+//     /// # Returns
+//     /// 
+//     /// This function returns the length of the queue
+//     fn add_existing_queue(&mut self, q: &mut DriverMessagesWithMutex) -> usize {
 
-        self.messages.append(&mut q.messages);
-        self.process_creations.append(&mut q.process_creations);
+//         self.data.messages.append(&mut q.data.messages);
+//         self.data.process_creations.append(&mut q.data.process_creations);
 
-        let tmp = serde_json::to_string(&DriverMessagesCache{
-            messages: self.messages.clone(),
-            process_creations: self.process_creations.clone(),
-        });
+//         let tmp = serde_json::to_string(&DriverMessagesCache{
+//             messages: self.messages.clone(),
+//             process_creations: self.process_creations.clone(),
+//         });
 
-        let len = match tmp {
-            Ok(v) => v.len(),
-            Err(e) => {
-                println!("[sanctum] [-] Error serializing temp object for len. {e}.");
-                return 0;
-            },
-        };
+//         let len = match tmp {
+//             Ok(v) => v.len(),
+//             Err(e) => {
+//                 println!("[sanctum] [-] Error serializing temp object for len. {e}.");
+//                 return 0;
+//             },
+//         };
 
-        len
-    }
+//         len
+//     }
 
-    /// Extract all data out of the queue if there is data.
-    /// 
-    /// # Returns
-    /// 
-    /// The function will return None if the queue was empty.
-    fn extract_all(&mut self) -> Option<DriverMessagesCache> {
+//     /// Extract all data out of the queue if there is data.
+//     /// 
+//     /// # Returns
+//     /// 
+//     /// The function will return None if the queue was empty.
+//     fn extract_all(&mut self) -> Option<DriverMessagesCache> {
         
-        let data = mem::take(self);
+//         let data = mem::take(self);
 
-        Some(data)
-    }
-}
+//         Some(data)
+//     }
+// }
 
-impl Default for DriverMessagesCache {
-    fn default() -> Self {
-        DriverMessagesCache { messages: Vec::new(), process_creations: Vec::new() }
-    }
-}
+// impl Default for DriverMessagesCache {
+//     fn default() -> Self {
+//         let data = DriverMessages::default();
+//         DriverMessagesCache { data }
+//     }
+// }
 
 impl Default for DriverMessagesWithMutex {
     fn default() -> Self {
         let mut mutex = FAST_MUTEX::default();
         unsafe { ExInitializeFastMutex(&mut mutex) };
-        DriverMessagesWithMutex { lock: mutex, is_empty: true, messages: Vec::new(), process_creations: Vec::new() }
+        let data = DriverMessages::default();
+
+        DriverMessagesWithMutex { lock: mutex, is_empty: true, data }
     }
 }
 
@@ -109,7 +118,7 @@ impl DriverMessagesWithMutex {
         }
 
         self.is_empty = false;
-        self.messages.push(data);
+        self.data.messages.push(data);
 
         unsafe { ExReleaseFastMutex(&mut self.lock) }; 
     }
@@ -138,7 +147,7 @@ impl DriverMessagesWithMutex {
         }
 
         self.is_empty = false;
-        self.process_creations.push(data);
+        self.data.process_creations.push(data);
         
         unsafe { ExReleaseFastMutex(&mut self.lock) }; 
     }
@@ -149,7 +158,7 @@ impl DriverMessagesWithMutex {
     /// # Returns
     /// 
     /// The function will return None if the queue was empty.
-    fn extract_all(&mut self) -> Option<DriverMessagesWithMutex> {
+    fn extract_all(&mut self) -> Option<DriverMessages> {
 
         let irql = unsafe { KeGetCurrentIrql() };
         if irql != 0 {
@@ -171,12 +180,18 @@ impl DriverMessagesWithMutex {
             return None;
         }
         
-        let data = mem::take(self);
-        self.is_empty = true;
+        //
+        // Use mem::swap to exchange the content of the data field of our internal kernel messages.
+        // mem::swap will keep the pointes the same; but change the content, this will avoid the BSOD's
+        // we were having using mem::take originally.
+        //
+        let mut extracted_data = DriverMessages::default();
+        mem::swap(&mut extracted_data, &mut self.data);
+        self.is_empty = true; // reset flag
 
         unsafe { ExReleaseFastMutex(&mut self.lock) }; 
 
-        Some(data)
+        Some(extracted_data)
     }
 
 }
@@ -339,10 +354,10 @@ pub fn ioctl_handler_get_kernel_msg_len(
 
     let len_of_response = if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
         let og_obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
-        println!("GOT THE OBJ! {}", og_obj.is_empty); // false
-
+        
         // todo the bluescreen could be the mem operation below
-        // let drained = og_obj.extract_all();
+        let drained = og_obj.extract_all();
+        println!("GOT THE DRAINED! {:?}", drained); // false
         // if drained.is_none() {
         //     println!("[sanctum] [-] Drained is none");
         //     return Err(DriverError::NoDataToSend);
