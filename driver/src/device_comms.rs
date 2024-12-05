@@ -197,6 +197,7 @@ impl DriverMessagesWithMutex {
 
     fn add_existing_queue(&mut self, q: &mut DriverMessages) -> usize {
 
+        self.is_empty = false;
         self.data.messages.append(&mut q.messages);
         self.data.process_creations.append(&mut q.process_creations);
 
@@ -379,11 +380,8 @@ pub fn ioctl_handler_get_kernel_msg_len(
         
         let mut drained = og_obj.extract_all();
         if drained.is_none() {
-            println!("[sanctum] [-] Drained is none");
             return Err(DriverError::NoDataToSend);
         }
-
-        println!("[sanctum] [+] Drained not none!");
         
         //
         // At this point, the transferred data form the queue has data in. Now try obtain a valid reference to
@@ -441,6 +439,7 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
     // make a call to extract_all to get all data from the message queue.
     let data = if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
         let obj = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
+        println!("OBJ DATA: {:?}, empty: {}", obj.data, obj.is_empty);
         obj.extract_all()
     } else {
         println!("[sanctum] [-] Invalid pointer");
@@ -450,8 +449,6 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
     if data.is_none() {
         return Err(DriverError::NoDataToSend);
     }
-
-    println!("[sanctum] [i] EXTRACTED DATA FROM CACHE!!!!!!!");
 
     let encoded_data = match serde_json::to_string(&data.unwrap()) {
         Ok(v) => v,
@@ -473,7 +470,7 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
         )
     };
 
-    println!("[i] Sent data from DRIVER_MESSAGES_CACHE: {}", encoded_data);
+    // println!("[i] Sent data from DRIVER_MESSAGES_CACHE: {}", encoded_data);
 
     Ok(())
 }

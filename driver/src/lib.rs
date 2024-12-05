@@ -15,7 +15,7 @@ use ::core::{ptr::null_mut, sync::atomic::{AtomicPtr, Ordering}};
 
 use alloc::{boxed::Box, format};
 use ffi::IoGetCurrentIrpStackLocation;
-use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, DriverMessagesWithMutex};
+use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, ioctl_handler_send_kernel_msgs_to_userland, DriverMessagesWithMutex};
 use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
 use utils::{ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
@@ -262,12 +262,12 @@ unsafe extern "C" fn handle_ioctl(_device: *mut DEVICE_OBJECT, pirp: PIRP) -> NT
             }
         }
         SANC_IOCTL_DRIVER_GET_MESSAGES => {
-            // if let Err(e) = ioctl_handler_send_kernel_msgs_to_userland(pirp){
-            //     STATUS_UNSUCCESSFUL
-            // } else {
-            //     STATUS_SUCCESS
-            // }
-            STATUS_SUCCESS
+            if let Err(_) = ioctl_handler_send_kernel_msgs_to_userland(pirp){
+                STATUS_UNSUCCESSFUL
+            } else {
+                STATUS_SUCCESS
+            }
+            // STATUS_SUCCESS
         }
 
         _ => {
