@@ -194,6 +194,28 @@ impl DriverMessagesWithMutex {
         Some(extracted_data)
     }
 
+
+    fn add_existing_queue(&mut self, q: &mut DriverMessages) -> usize {
+
+        self.data.messages.append(&mut q.messages);
+        self.data.process_creations.append(&mut q.process_creations);
+
+        let tmp = serde_json::to_string(&DriverMessages{
+            messages: self.data.messages.clone(),
+            process_creations: self.data.process_creations.clone(),
+        });
+
+        let len = match tmp {
+            Ok(v) => v.len(),
+            Err(e) => {
+                println!("[sanctum] [-] Error serializing temp object for len. {e}.");
+                return 0;
+            },
+        };
+
+        len
+    }
+
 }
 
 struct IoctlBuffer {
@@ -355,50 +377,50 @@ pub fn ioctl_handler_get_kernel_msg_len(
     let len_of_response = if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
         let og_obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
         
-        // todo the bluescreen could be the mem operation below
-        let drained = og_obj.extract_all();
-        println!("GOT THE DRAINED! {:?}", drained); // false
-        // if drained.is_none() {
-        //     println!("[sanctum] [-] Drained is none");
-        //     return Err(DriverError::NoDataToSend);
-        // }
+        let mut drained = og_obj.extract_all();
+        if drained.is_none() {
+            println!("[sanctum] [-] Drained is none");
+            return Err(DriverError::NoDataToSend);
+        }
 
-        // println!("[sanctum] [+] Drained not none!");
+        println!("[sanctum] [+] Drained not none!");
         
-        // //
-        // // At this point, the transferred data form the queue has data in. Now try obtain a valid reference to
-        // // the driver message cache global
-        // //
+        //
+        // At this point, the transferred data form the queue has data in. Now try obtain a valid reference to
+        // the driver message cache global
+        //
 
-        // if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
-        //     let driver_message_cache = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
-        //     driver_message_cache.add_existing_queue(&mut drained.unwrap())
-        // } else {
-        //     println!("[sanctum] [-] Driver messages is null");
-        //     return Err(DriverError::DriverMessagePtrNull);
-        // }
+        if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
+            let driver_message_cache = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
+            let l = driver_message_cache.add_existing_queue(&mut drained.unwrap());
+            println!("Len: {l}, {:?}", driver_message_cache.data);
+            l
+        } else {
+            println!("[sanctum] [-] Driver messages is null");
+            return Err(DriverError::DriverMessagePtrNull);
+        }
     } else {
         println!("[sanctum] [-] Invalid pointer");
         return Err(DriverError::DriverMessagePtrNull);
     };
 
 
-    // if len_of_response == 0 {
-    //     return Err(DriverError::NoDataToSend);
-    // }
+    if len_of_response == 0 {
+        return Err(DriverError::NoDataToSend);
+    }
 
-    // unsafe {(*pirp).IoStatus.Information = mem::size_of::<usize>() as u64};
+    unsafe {(*pirp).IoStatus.Information = mem::size_of::<usize>() as u64};
 
-    // // copy the memory into the buffer
-    // unsafe {
-    //     RtlCopyMemoryNonTemporal(
-    //         (*pirp).AssociatedIrp.SystemBuffer, 
-    //         &len_of_response as *const _ as *const _, 
-    //         mem::size_of::<usize>() as u64
-    //     )
-    // };
+    // copy the memory into the buffer
+    unsafe {
+        RtlCopyMemoryNonTemporal(
+            (*pirp).AssociatedIrp.SystemBuffer, 
+            &len_of_response as *const _ as *const _, 
+            mem::size_of::<usize>() as u64
+        )
+    };
 
-    // println!("[i] Sent data for size of DRIVER_MESSAGES_CACHE: {}", len_of_response);
+    println!("[i] Sent data for size of DRIVER_MESSAGES_CACHE: {}", len_of_response);
 
     Ok(())
 }
