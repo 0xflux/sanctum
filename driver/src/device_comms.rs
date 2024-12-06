@@ -181,12 +181,13 @@ impl DriverMessagesWithMutex {
         }
         
         //
-        // Use mem::swap to exchange the content of the data field of our internal kernel messages.
-        // mem::swap will keep the pointes the same; but change the content, this will avoid the BSOD's
-        // we were having using mem::take originally.
+        // Using mem::take now  seems safe against kernel panics; we were having some issues
+        // previous with this, leading to IRQL_NOT_LESS_OR_EQUAL bsod. That was likely a programming
+        // error as opposed to a safety error with mem::take. If further bsod's occur around mem::take,
+        // try swapping to mem::swap; however, the core functionality of both should be the same.
         //
-        let mut extracted_data = DriverMessages::default();
-        mem::swap(&mut extracted_data, &mut self.data);
+        let extracted_data = mem::take(&mut self.data);
+
         self.is_empty = true; // reset flag
 
         unsafe { ExReleaseFastMutex(&mut self.lock) }; 
