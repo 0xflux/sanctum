@@ -212,7 +212,6 @@ impl SanctumDriverManager {
             return None;
         }
 
-        // parse out the result
         if bytes_returned == 0 {
             eprintln!("[-] No bytes returned from DeviceIOControl");
             return None;
