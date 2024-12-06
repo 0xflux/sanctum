@@ -356,8 +356,6 @@ pub fn ioctl_handler_get_kernel_msg_len(
         )
     };
 
-    println!("[i] Sent data for size of DRIVER_MESSAGES_CACHE: {}", len_of_response);
-
     Ok(())
 }
 
@@ -406,10 +404,6 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
             size_of_struct
         )
     };
-
-    println!("[sanctum] Copied data: {:?}", unsafe {
-        slice::from_raw_parts((*pirp).AssociatedIrp.SystemBuffer as *const u8, size_of_struct as usize)
-    });
 
     Ok(())
 }
