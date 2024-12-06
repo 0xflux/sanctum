@@ -2,10 +2,10 @@
 
 use super::driver_manager::SanctumDriverManager;
 use core::str;
-use std::{ffi::c_void, mem::zeroed, slice::from_raw_parts, str::from_utf8};
+use std::{ffi::c_void, slice::from_raw_parts};
 use shared_no_std::{
     constants::VERSION_CLIENT,
-    ioctl::{SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
+    ioctl::{DriverMessages, SancIoctlPing, SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT},
 };
 use windows::Win32::System::IO::DeviceIoControl;
 
@@ -178,8 +178,6 @@ impl SanctumDriverManager {
             return;
         }
 
-        println!("[i] Got size of kernel msg: {}", size_of_kernel_msg);
-
         let mut response: Vec<u8> = vec![0; size_of_kernel_msg];
         let mut bytes_returned: u32 = 0;
 
@@ -190,7 +188,7 @@ impl SanctumDriverManager {
                 SANC_IOCTL_DRIVER_GET_MESSAGES,
                 None,
                 0u32,
-                Some(response.as_mut_ptr() as *mut _),
+                Some(response.as_mut_ptr() as *mut c_void),
                 size_of_kernel_msg as u32,
                 Some(&mut bytes_returned),
                 None,
@@ -200,8 +198,6 @@ impl SanctumDriverManager {
         if let Err(e) = result {
             eprintln!("[-] Error from attempting IOCTL call. {e}");
             return;
-        } else {
-            println!("SUCCESSFUL SUCCESSFUL response: {:?}, Response len: {}, size: {}", response, response.len(), bytes_returned);
         }
 
         // parse out the result
@@ -210,12 +206,18 @@ impl SanctumDriverManager {
             return;
         }
 
-        match serde_json::to_string(&response) {
-            Ok(v) => {
-                println!("[i] Got data: {}", v);
+        let response_serialised = match serde_json::from_slice::<DriverMessages>(&response) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[-] Could not serialise response from driver messages. {e} Got: {:?}", response);
+                return;
             },
-            Err(e) => eprintln!("[-] Could not process data: {e}"),
-        }
+        };
+
+        println!("[i] Response serialised: {:?}", response_serialised);
+
+        // todo something with the data
+
     }
 
 

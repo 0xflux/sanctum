@@ -1,8 +1,8 @@
-use core::{ffi::c_void, mem, ptr::null_mut, sync::atomic::Ordering};
+use core::{ffi::c_void, mem, ptr::null_mut, slice, sync::atomic::Ordering};
 
 use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::SancIoctlPing};
+use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::{DriverMessages, SancIoctlPing}};
 use wdk::println;
 use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
 use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
@@ -15,70 +15,6 @@ pub struct DriverMessagesWithMutex {
     is_empty: bool,
     data: DriverMessages,
 }
-
-/// The actual type within DriverMessagesWithMutex which contains the data.
-#[derive(Serialize, Deserialize, Default, Debug)]
-struct DriverMessages {
-    messages: Vec<String>,
-    process_creations: Vec<ProcessStarted>,
-}
-
-// #[derive(Serialize, Deserialize)]
-// pub struct DriverMessagesCache {
-//     data: DriverMessages,
-// }
-
-// impl DriverMessagesCache {
-//     pub fn new() -> Self {
-//         DriverMessagesCache::default()
-//     }
-
-
-//     /// Adds an existing Vec<Value> queue to the current object
-//     /// 
-//     /// # Returns
-//     /// 
-//     /// This function returns the length of the queue
-//     fn add_existing_queue(&mut self, q: &mut DriverMessagesWithMutex) -> usize {
-
-//         self.data.messages.append(&mut q.data.messages);
-//         self.data.process_creations.append(&mut q.data.process_creations);
-
-//         let tmp = serde_json::to_string(&DriverMessagesCache{
-//             messages: self.messages.clone(),
-//             process_creations: self.process_creations.clone(),
-//         });
-
-//         let len = match tmp {
-//             Ok(v) => v.len(),
-//             Err(e) => {
-//                 println!("[sanctum] [-] Error serializing temp object for len. {e}.");
-//                 return 0;
-//             },
-//         };
-
-//         len
-//     }
-
-//     /// Extract all data out of the queue if there is data.
-//     /// 
-//     /// # Returns
-//     /// 
-//     /// The function will return None if the queue was empty.
-//     fn extract_all(&mut self) -> Option<DriverMessagesCache> {
-        
-//         let data = mem::take(self);
-
-//         Some(data)
-//     }
-// }
-
-// impl Default for DriverMessagesCache {
-//     fn default() -> Self {
-//         let data = DriverMessages::default();
-//         DriverMessagesCache { data }
-//     }
-// }
 
 impl Default for DriverMessagesWithMutex {
     fn default() -> Self {
@@ -202,7 +138,7 @@ impl DriverMessagesWithMutex {
         self.data.messages.append(&mut q.messages);
         self.data.process_creations.append(&mut q.process_creations);
 
-        let tmp = serde_json::to_string(&DriverMessages{
+        let tmp = serde_json::to_vec(&DriverMessages{
             messages: self.data.messages.clone(),
             process_creations: self.data.process_creations.clone(),
         });
@@ -217,7 +153,6 @@ impl DriverMessagesWithMutex {
 
         len
     }
-
 }
 
 struct IoctlBuffer {
@@ -377,10 +312,10 @@ pub fn ioctl_handler_get_kernel_msg_len(
     }
 
     let len_of_response = if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
-        let og_obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
+        let driver_messages = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
         
-        let mut drained = og_obj.extract_all();
-        if drained.is_none() {
+        let local_drained_driver_messages = driver_messages.extract_all();
+        if local_drained_driver_messages.is_none() {
             return Err(DriverError::NoDataToSend);
         }
         
@@ -391,9 +326,11 @@ pub fn ioctl_handler_get_kernel_msg_len(
 
         if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
             let driver_message_cache = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
-            let l = driver_message_cache.add_existing_queue(&mut drained.unwrap());
-            println!("Len: {l}, {:?}", driver_message_cache.data);
-            l
+            
+            // add the drained data from the live driver messages to the cache, and return the size of the data
+            let size_of_serialised_cache: usize = driver_message_cache.add_existing_queue(&mut local_drained_driver_messages.unwrap());
+
+            size_of_serialised_cache
         } else {
             println!("[sanctum] [-] Driver messages is null");
             return Err(DriverError::DriverMessagePtrNull);
@@ -440,7 +377,6 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
     // make a call to extract_all to get all data from the message queue.
     let data = if !DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst).is_null() {
         let obj = unsafe { &mut *DRIVER_MESSAGES_CACHE.load(Ordering::SeqCst) };
-        println!("OBJ DATA: {:?}, empty: {}", obj.data, obj.is_empty);
         obj.extract_all()
     } else {
         println!("[sanctum] [-] Invalid pointer");
@@ -451,7 +387,7 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
         return Err(DriverError::NoDataToSend);
     }
 
-    let encoded_data = match serde_json::to_string(&data.unwrap()) {
+    let encoded_data = match serde_json::to_vec(&data.unwrap()) {
         Ok(v) => v,
         Err(_) => {
             println!("[sanctum] [-] Error serializing data to string in ioctl_handler_send_kernel_msgs_to_userland");
@@ -466,10 +402,14 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
     unsafe {
         RtlCopyMemoryNonTemporal(
             (*pirp).AssociatedIrp.SystemBuffer, 
-            &encoded_data as *const _ as *const c_void, 
+            encoded_data.as_ptr() as *const _, 
             size_of_struct
         )
     };
+
+    println!("[sanctum] Copied data: {:?}", unsafe {
+        slice::from_raw_parts((*pirp).AssociatedIrp.SystemBuffer as *const u8, size_of_struct as usize)
+    });
 
     // println!("[i] Sent data from DRIVER_MESSAGES_CACHE: {}", encoded_data);
 

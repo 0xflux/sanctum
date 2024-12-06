@@ -1,6 +1,10 @@
 // This file will contain definitions of IOCTLs and definitions of any structures related directly
 // to IOCTL message passing
 
+use serde::{Deserialize, Serialize};
+
+use crate::driver_ipc::ProcessStarted;
+
 extern crate alloc;
 
 // definitions to prevent importing the windows crate
@@ -66,3 +70,16 @@ impl Default for SancIoctlPing<> {
          Self::new()
      }
  }
+
+ /// The actual type within DriverMessagesWithMutex which contains the data.
+/// 
+/// # Warning
+/// 
+/// This struct definition is NOT shared between the driver and usermode code due to
+/// the requirement for Vec (alloc vs std). Therefore, this should be manually defined and
+/// updated in the usermode code as it will use a different allocator.
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct DriverMessages {
+    pub messages: alloc::vec::Vec<alloc::string::String>,
+    pub process_creations: alloc::vec::Vec<ProcessStarted>,
+}
