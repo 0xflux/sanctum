@@ -411,8 +411,6 @@ pub fn ioctl_handler_send_kernel_msgs_to_userland(
         slice::from_raw_parts((*pirp).AssociatedIrp.SystemBuffer as *const u8, size_of_struct as usize)
     });
 
-    // println!("[i] Sent data from DRIVER_MESSAGES_CACHE: {}", encoded_data);
-
     Ok(())
 }
 

@@ -134,8 +134,15 @@ impl SanctumDriverManager {
     }
 
 
-    /// Pings the driver with a struct as its message
-    pub fn ioctl_get_driver_messages(&mut self) {
+    /// Makes a request to pull messages from the driver back to userland for parsing, these events include:
+    /// 
+    /// - Debug messages 
+    /// - Process creation details
+    /// 
+    /// # Returns
+    /// This function returns an optional DriverMessages; should there be no data, or an error occurred, None is 
+    /// returned.
+    pub fn ioctl_get_driver_messages(&mut self) -> Option<DriverMessages>{
         // todo improve how the error handling happens..
         if self.handle_via_path.handle.is_none() {
             // try 1 more time
@@ -145,14 +152,15 @@ impl SanctumDriverManager {
                     Unable to pass IOCTL. Handle: {:?}", 
                     self.handle_via_path.handle
                 );
-                return;
+                return None;
             }
         }
 
-        // todo this will possibly quickly grow so it should recursively keep draining the messages from the kernel until
-        // it has enough space, or to do this another way? maybe a pre-check to get the size before allocating?
-        // the driver could store the data into a temp buffer until the next call which will then send the data of size x,
-        // when it stores into the temp buffer it can reset the 'live' vec in the driver?
+        //
+        // Make a request into the driver to obtain the buffer size of the response. Internally, this will 
+        // store the current state into a cache which will then be queried immediately after we have the 
+        // buffer size.
+        //
 
         let mut size_of_kernel_msg: usize = 0;
         let mut bytes_returned: u32 = 0;
@@ -171,12 +179,16 @@ impl SanctumDriverManager {
         };
         if let Err(e) = result {
             eprintln!("[-] Error with calling SANC_IOCTL_DRIVER_GET_MESSAGE_LEN. {e}. Size of kernel msg: {}", size_of_kernel_msg);
-            return;
+            return None;
         }
 
         if size_of_kernel_msg == 0 {
-            return;
+            return None;
         }
+
+        //
+        // Now we have the buffer size, and it is greater than 0, request the data.
+        //
 
         let mut response: Vec<u8> = vec![0; size_of_kernel_msg];
         let mut bytes_returned: u32 = 0;
@@ -197,26 +209,27 @@ impl SanctumDriverManager {
 
         if let Err(e) = result {
             eprintln!("[-] Error from attempting IOCTL call. {e}");
-            return;
+            return None;
         }
 
         // parse out the result
         if bytes_returned == 0 {
             eprintln!("[-] No bytes returned from DeviceIOControl");
-            return;
+            return None;
         }
 
         let response_serialised = match serde_json::from_slice::<DriverMessages>(&response) {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("[-] Could not serialise response from driver messages. {e} Got: {:?}", response);
-                return;
+                return None;
             },
         };
 
         println!("[i] Response serialised: {:?}", response_serialised);
 
         // todo something with the data
+        return Some(response_serialised)
 
     }
 
