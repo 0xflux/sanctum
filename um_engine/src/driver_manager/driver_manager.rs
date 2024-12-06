@@ -28,7 +28,6 @@ pub struct SanctumDriverManager {
     pub(super) svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
     pub state: DriverState,
-    pub dbg_msg_queue: KernelDbgMsgQueue,
 }
 
 
@@ -60,7 +59,6 @@ impl SanctumDriverManager {
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // sets to None
             state: DriverState::Uninstalled("".to_string()),
-            dbg_msg_queue: KernelDbgMsgQueue::default(),
         };
 
         // attempt an install of the driver

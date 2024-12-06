@@ -33,17 +33,6 @@ impl UmIpc {
         println!("[+] Named pipe listening on {}", PIPE_NAME);
 
         loop {
-
-            //
-            // Check any driver messages, before usermode pipe msgs
-            //
-
-            engine.driver_manager.lock().unwrap().ioctl_get_driver_messages();
-
-            //
-            // Now check for pipe message
-            //
-
             // create the next server instance before accepting the client connection, without this
             // there is a fraction of time where there will be no server listening
             let next_server = ServerOptions::new().create(PIPE_NAME)?;
@@ -189,9 +178,7 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "driver_get_state" => {
             to_value(engine_clone.driver_get_state()).unwrap()
         },
-        "driver_collect_knl_dbg_msg" => {
-            to_value(engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.get_and_empty()).unwrap()
-        }
+        
 
 
         //
@@ -200,41 +187,9 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "ioctl_ping_driver" => {
             to_value(engine_clone.ioctl_ping_driver()).unwrap()
         },
-        "drvipc_dbg_msg" => {
-            if let Some(args) = request.args {
-                // print for console
-                let process: String = serde_json::from_value(args).unwrap();
-
-                // add the kernel message to the queue
-                engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.push_message(&process);
-            } else {
-                to_value(CommandResponse {
-                    status: "error".to_string(),
-                    message: "No path passed to scanner".to_string(),
-                }).unwrap();
-            };
-
-            // return none as we wont want to send data back, the pipe is closed.
-            return None;
-        },
-        "drvipc_process_created" => {
-            if let Some(args) = request.args {
-                // print for console
-                let process: ProcessStarted = serde_json::from_value(args).unwrap();
-
-                // add the kernel message to the queue
-                engine_clone.driver_manager.lock().unwrap().dbg_msg_queue.push_process_creations(&process);
-
-            } else {
-                to_value(CommandResponse {
-                    status: "error".to_string(),
-                    message: "No path passed to scanner".to_string(),
-                }).unwrap();
-            };
-
-            // return none as we wont want to send data back, the pipe is closed.
-            return None;
-        },
+        "driver_collect_knl_dbg_msg" => {
+            to_value(engine_clone.driver_manager.lock().unwrap().ioctl_get_driver_messages()).unwrap()
+        }
 
 
         //
