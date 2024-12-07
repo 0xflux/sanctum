@@ -23,7 +23,7 @@ use windows::{
 };
 
 
-use crate::driver_manager::DriverHandleRaii;
+use crate::{driver_manager::DriverHandleRaii, utils::log::{Log, LogLevel}};
 
 use super::driver_manager::SanctumDriverManager;
 impl SanctumDriverManager {
@@ -96,7 +96,7 @@ impl SanctumDriverManager {
             } // close match handle result
         };
 
-        println!("[+] Driver successfully installed.");
+        self.log.log(LogLevel::Success, "Driver successfully installed");
         self.state = DriverState::Installed("".to_string());
 
         //
@@ -105,7 +105,7 @@ impl SanctumDriverManager {
 
         if !handle.is_invalid() {
             if let Err(e) = unsafe { CloseServiceHandle(handle) } {
-                eprintln!("[-] Unable to close handle after installing service. Error: {e}");
+                self.log.log(LogLevel::Error, &format!("[-] Unable to close handle after installing service. Error: {e}"));
             }
         }
     }
@@ -143,9 +143,9 @@ impl SanctumDriverManager {
 
         // get a handle to sanctum service
         if let Err(e) = sc_mgr.get_handle_to_sanctum_svc(self) {
-            eprintln!(
-                "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
-            );
+            self.log.log(LogLevel::Error, &format!(
+                "Failed to get handle to the Sanctum service when attempting to start it. {e}"
+            ));
             let msg = format!("Failed to get handle to the Sanctum service when attempting to start it {}.", e);
             self.state = DriverState::Stopped(msg);
             return;
@@ -153,10 +153,10 @@ impl SanctumDriverManager {
 
         unsafe {
             if let Err(e) = StartServiceW(sc_mgr.sanctum_handle.unwrap(), None) {
-                eprintln!(
+                self.log.log(LogLevel::Error, &format!(
                     "[-] Failed to start service. {e}. Handle: {:?}.",
                     sc_mgr.mgr_handle.unwrap()
-                );
+                ));
                 
                 let msg = format!("Failed to start service. {e}.");
                 self.state = DriverState::Stopped(msg);
@@ -176,7 +176,8 @@ impl SanctumDriverManager {
         }
 
         self.state = DriverState::Started("".to_string());
-        println!("[+] Driver started successfully.");
+
+        self.log.log(LogLevel::Success, "Driver started successfully");
     }
 
 
@@ -191,9 +192,7 @@ impl SanctumDriverManager {
 
         // get a handle to sanctum service
         if let Err(e) = sc_mgr.get_handle_to_sanctum_svc(self) {
-            eprintln!(
-                "[-] Failed to get handle to the Sanctum service when attempting to start it. {e}"
-            );
+            self.log.log(LogLevel::Error, &format!("Failed to get handle to the Sanctum service when attempting to start it. {e}"));
             let msg = format!("Failed to get handle to the Sanctum service when attempting to start it. {e}");
             self.update_state_msg(msg);
             return;
@@ -209,10 +208,7 @@ impl SanctumDriverManager {
             )
         } {
             // if was error
-            eprintln!(
-                "[-] Failed to stop the service, {e}. Handle: {:?}",
-                sc_mgr.mgr_handle.unwrap()
-            );
+            self.log.log(LogLevel::Error, &format!("Failed to stop the service, {e}. Handle: {:?}", sc_mgr.mgr_handle.unwrap()));
             let msg = format!("Failed to stop the service, {e}");
             self.update_state_msg(msg);
             return;
@@ -225,7 +221,7 @@ impl SanctumDriverManager {
 
         self.state = DriverState::Stopped("".to_string());
 
-        println!("[+] Driver stopped successfully.");
+        self.log.log(LogLevel::Success, "Driver stopped successfully");
     }
 
 
@@ -240,19 +236,14 @@ impl SanctumDriverManager {
 
         // get a handle to sanctum service
         if let Err(e) = sc_mgr.get_handle_to_sanctum_svc(self) {
-            eprintln!(
-                "[-] Failed to get handle to the Sanctum service. {e}"
-            );
+            self.log.log(LogLevel::Error, &format!("Failed to get handle to the Sanctum service. {e}"));
             let msg = format!("Failed to get handle to the Sanctum service. {e}");
             self.update_state_msg(msg);
             return;
         }
 
         if let Err(e) = unsafe { DeleteService(sc_mgr.sanctum_handle.unwrap()) } {
-            eprintln!(
-                "[-] Failed to uninstall the driver: {e}. Handle: {:?}",
-                sc_mgr.mgr_handle.unwrap()
-            );
+            self.log.log(LogLevel::Error, &format!("[-] Failed to uninstall the driver: {e}. Handle: {:?}", sc_mgr.mgr_handle.unwrap()));
             let msg = format!("Failed to uninstall the driver: {e}");
             self.update_state_msg(msg);
             return;
@@ -260,7 +251,7 @@ impl SanctumDriverManager {
 
         self.state = DriverState::Uninstalled("".to_string());
         
-        println!("[+] Driver uninstalled successfully.");
+        self.log.log(LogLevel::Success, "Driver uninstalled successfully");
     }
 
 
@@ -288,7 +279,7 @@ impl SanctumDriverManager {
         match handle {
             Ok(h) => self.handle_via_path.handle = Some(h),
             Err(e) => {
-                eprintln!("[-] Unable to get handle to driver via its registry path, error: {e}");
+                self.log.log(LogLevel::Error, &format!("Unable to get handle to driver via its registry path, error: {e}."));
                 return false;
             }
         }
@@ -364,13 +355,15 @@ impl Drop for ServiceControlManager {
             return;
         }
 
+        let log = Log::init();
+
         if self.mgr_handle.unwrap().0 != null_mut() {
             if let Err(e) = unsafe { CloseServiceHandle(self.mgr_handle.unwrap()) } {
-                eprintln!("[-] Unable to close handle after installing service. Error: {e}");
+                log.log(LogLevel::Error, &format!("Unable to close handle after installing service. Error: {e}."));
             }
             self.mgr_handle = None;
         } else {
-            eprintln!("[-] Unable to close handle, handle was null!");
+            log.log(LogLevel::Error, "Unable to close handle, handle was null");
         }
 
         //
@@ -382,11 +375,11 @@ impl Drop for ServiceControlManager {
 
         if self.sanctum_handle.unwrap().0 != null_mut() {
             if let Err(e) = unsafe { CloseServiceHandle(self.sanctum_handle.unwrap()) } {
-                eprintln!("[-] Unable to close handle after installing service. Error: {e}");
+                log.log(LogLevel::Error, &format!("Unable to close handle after installing service. Error: {e}."));
             }
             self.sanctum_handle = None;
         } else {
-            eprintln!("[-] Unable to close handle, handle was null!");
+            log.log(LogLevel::Error, "Unable to close handle, handle was null");
         }
     }
 }

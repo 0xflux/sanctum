@@ -13,8 +13,7 @@ use serde_json::{from_slice, to_value, to_vec, Value};
 use shared_no_std::{constants::PIPE_NAME, ipc::{CommandRequest, CommandResponse}};
 use shared_std::settings::SanctumSettings;
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
-use crate::{engine::UmEngine, settings::SanctumSettingsImpl}; 
-use shared_no_std::driver_ipc::ProcessStarted;
+use crate::{engine::UmEngine, settings::SanctumSettingsImpl, utils::log::{Log, LogLevel}}; 
 
 /// An interface for the usermode IPC server
 pub struct UmIpc{}
@@ -22,7 +21,8 @@ pub struct UmIpc{}
 impl UmIpc {
 
     pub async fn listen(engine: Arc<UmEngine>) -> Result<(), Box<dyn std::error::Error>> {
-        println!("[i] Trying to start IPC server at {}...", PIPE_NAME);
+        let logger = Log::init();
+        logger.log(LogLevel::Info, &format!("Trying to start IPC server at {}...", PIPE_NAME));
 
         // set up IPC
         let mut server = ServerOptions::new()
@@ -30,7 +30,7 @@ impl UmIpc {
             .pipe_mode(PipeMode::Message)
             .create(PIPE_NAME)?;
 
-        println!("[+] Named pipe listening on {}", PIPE_NAME);
+        logger.log(LogLevel::Success, &format!("Named pipe listening on {}", PIPE_NAME));
 
         loop {
             // create the next server instance before accepting the client connection, without this
@@ -47,12 +47,13 @@ impl UmIpc {
     
             tokio::spawn(async move {
                 let mut buffer = vec![0; 1024];
+                let logger = Log::init();
     
                 // read the request
                 match client.read(&mut buffer).await {
                     Ok(bytes_read) => {
                         if bytes_read == 0 {
-                            println!("[i] Client disconnected.");
+                            logger.log(LogLevel::Info, "IPC client disconnected");
                             return;
                         }
     
@@ -69,25 +70,24 @@ impl UmIpc {
                                     match to_vec(&response) {
                                         Ok(response_bytes) => {
                                             if let Err(e) = client.write_all(&response_bytes).await {
-                                                eprintln!("[-] Failed to send response to client via pipe: {}", e);
+                                                logger.log(LogLevel::Error, &format!("[-] Failed to send response to client via pipe: {}", e));
                                             }
                                         },
                                         // err serialising to vec
-                                        Err(e) => eprintln!("[-] Failed to serialise response: {}", e),
+                                        Err(e) => logger.log(LogLevel::Error, &format!("[-] Failed to serialise response: {}", e)),
                                     };
                                 };
                             },
                             // err serialising into CommandRequest
-                            Err(e) => eprintln!("Failed to deserialise request: {:?}. Err: {}. Bytes read: {}", &buffer[..bytes_read], e, bytes_read),
+                            Err(e) => logger.log(LogLevel::Error, &format!("Failed to deserialise request: {:?}. Err: {}. Bytes read: {}", &buffer[..bytes_read], e, bytes_read)),
                         }
                     },
                     // err reading IPC
-                    Err(e) => eprintln!("Failed to read from client: {}", e),
+                    Err(e) => logger.log(LogLevel::Error, &format!("Failed to read from client: {}", e)),
                 }
             });
         }
     }
-    
 }
 
 

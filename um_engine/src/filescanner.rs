@@ -5,8 +5,10 @@
 
 use std::{collections::BTreeSet, fs::{self, File}, io::{self, BufRead, BufReader, Read, Write}, os::windows::fs::MetadataExt, path::PathBuf, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use md5::{Digest, Md5};
-use shared_no_std::constants::IOC_LIST_LOCATION;
+use shared_no_std::constants::{IOC_LIST_LOCATION, IOC_URL};
 use shared_std::file_scanner::{FileScannerState, MatchedIOC, ScanningLiveInfo};
+
+use crate::utils::log::{Log, LogLevel};
 
 
 /// The FileScanner is the public interface into the module handling any static file scanning type capability.
@@ -22,6 +24,7 @@ pub struct FileScanner {
     // state - The state of the scanner so we can lock it whilst scanning
     pub state: Arc<Mutex<FileScannerState>>,
     pub scanning_info: Arc<Mutex<ScanningLiveInfo>>,
+    log: Log,
 }
 
 trait SLI {
@@ -50,6 +53,8 @@ impl FileScanner {
     /// Construct a new instance of the FileScanner with no parameters.
     pub async fn new() -> Result<Self, std::io::Error> {
 
+        let log = Log::init();
+
         //
         // ingest latest IOC hash list
         //
@@ -61,9 +66,9 @@ impl FileScanner {
         let file = match File::open(&ioc_location) {
             Ok(f) => f,
             Err(e) => {
-                println!("[-] IOC list not found, downloading to {}.", ioc_location);
+                log.log(LogLevel::Warning, format!("[-] IOC list not found, downloading to {}.", ioc_location).as_str());
                 if e.kind() == io::ErrorKind::NotFound {
-                    let file_data = reqwest::get("https://raw.githubusercontent.com/0xflux/Sanctum/refs/heads/main/ioc_list.txt")
+                    let file_data = reqwest::get(IOC_URL)
                         .await.unwrap()
                         .text().await.unwrap();
                     let mut f = File::create_new(&ioc_location).expect(format!("[-] Could not create new file for IOCs. Loc: {}", ioc_location).as_str());
@@ -86,6 +91,7 @@ impl FileScanner {
                 iocs: bts,
                 state: Arc::new(Mutex::new(FileScannerState::Inactive)),
                 scanning_info: Arc::new(Mutex::new(ScanningLiveInfo::new())),
+                log,
             }
         )
     }
@@ -331,7 +337,7 @@ impl FileScanner {
                 let entry = match entry {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("[-] Error with entry, e: {e}");
+                        self.log.log(LogLevel::Warning, &format!("[-] Error with entry, e: {e}"));
                         continue;
                     },
                 };
@@ -372,7 +378,7 @@ impl FileScanner {
                             });
                         }
                     },
-                    Err(e) => eprintln!("[-] Error scanning: {e}"),
+                    Err(e) => self.log.log(LogLevel::Warning, &format!("[-] Error scanning: {e}")),
                 }
             }
         }

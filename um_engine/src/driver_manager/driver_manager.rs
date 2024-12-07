@@ -12,7 +12,7 @@ use windows::{
     },
 };
 
-use crate::strings::ToUnicodeString;
+use crate::{strings::ToUnicodeString, utils::log::{Log, LogLevel}};
 
 /// The SanctumDriverManager holds key information to be shared between
 /// modules which relates to uniquely identifiable attributes such as its name
@@ -28,6 +28,7 @@ pub struct SanctumDriverManager {
     pub(super) svc_name: Vec<u16>,
     pub handle_via_path: DriverHandleRaii,
     pub state: DriverState,
+    pub log: Log,
 }
 
 
@@ -38,8 +39,12 @@ impl SanctumDriverManager {
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
         let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
+        let log = Log::init();
 
-        let appdata = std::env::var("APPDATA").expect("[-] Could not find App Data folder in environment variables.]");
+        let appdata = match std::env::var("APPDATA") {
+            Ok(a) => a,
+            Err(e) => log.panic(&format!("Could not find App Data folder in environment variables. {e}")),
+        };
         let sys_file_path: Vec<u16> = PathBuf::from(appdata).join(SANC_SYS_FILE_LOCATION).as_os_str().encode_wide().chain(std::iter::once(0)).collect();
 
         let svc_name = SVC_NAME.to_u16_vec();
@@ -59,6 +64,7 @@ impl SanctumDriverManager {
             svc_name,
             handle_via_path: DriverHandleRaii::default(), // sets to None
             state: DriverState::Uninstalled("".to_string()),
+            log,
         };
 
         // attempt an install of the driver
@@ -100,7 +106,6 @@ impl Default for DriverHandleRaii {
 impl Drop for DriverHandleRaii {
     fn drop(&mut self) {
         if self.handle.is_some() && !self.handle.unwrap().is_invalid() {
-            println!("[i] Dropping driver handle.");
             let _ = unsafe { CloseHandle(self.handle.unwrap()) };
             self.handle = None;
         }
@@ -108,26 +113,26 @@ impl Drop for DriverHandleRaii {
 }
 
 
-/// Gets the path to the .sys file on the target device, for the time being this needs to be
-/// located in the same folder as where this usermode exe is run from.
-fn get_sys_file_path() -> Vec<u16> {
-    //
-    // A little long winded, but construct the path as a PCWSTR to where the sys driver is
-    // this should be bundled into the same location as where the usermode exe is.
-    //
-    let mut svc_path: Vec<u16> = vec![0u16; MAX_PATH as usize];
-    let len = unsafe { GetModuleFileNameW(None, &mut svc_path) };
-    if len == 0 {
-        eprintln!(
-            "[-] Error getting path of module. Win32 Error: {}",
-            unsafe { GetLastError().0 }
-        );
-    } else if len >= MAX_PATH {
-        panic!("[-] Path of module is too long. Run from a location with a shorter path.");
-    }
+// /// Gets the path to the .sys file on the target device, for the time being this needs to be
+// /// located in the same folder as where this usermode exe is run from.
+// fn get_sys_file_path() -> Vec<u16> {
+//     //
+//     // A little long winded, but construct the path as a PCWSTR to where the sys driver is
+//     // this should be bundled into the same location as where the usermode exe is.
+//     //
+//     let mut svc_path: Vec<u16> = vec![0u16; MAX_PATH as usize];
+//     let len = unsafe { GetModuleFileNameW(None, &mut svc_path) };
+//     if len == 0 {
+//         eprintln!(
+//             "[-] Error getting path of module. Win32 Error: {}",
+//             unsafe { GetLastError().0 }
+//         );
+//     } else if len >= MAX_PATH {
+//         panic!("[-] Path of module is too long. Run from a location with a shorter path.");
+//     }
 
-    svc_path.truncate(len as usize - 11); // remove um_engine.sys\0
-    svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file
+//     svc_path.truncate(len as usize - 11); // remove um_engine.sys\0
+//     svc_path.append(&mut SYS_INSTALL_RELATIVE_LOC.to_u16_vec()); // append the .sys file
 
-    svc_path
-}
+//     svc_path
+// }

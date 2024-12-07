@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use shared_std::settings::SanctumSettings;
 
-use crate::utils::get_logged_in_username;
+use crate::utils::{env::get_logged_in_username, log::Log};
 
 pub trait SanctumSettingsImpl {
     fn load() -> Self;
@@ -10,7 +10,9 @@ pub trait SanctumSettingsImpl {
 }
 
 impl SanctumSettingsImpl for SanctumSettings {
-    fn load() -> Self {
+    fn load() -> Self {       
+        let log = Log::init();
+
         let username = get_logged_in_username().unwrap();
         let paths = get_setting_paths(&username);
         let dir = paths.0;
@@ -33,8 +35,14 @@ impl SanctumSettingsImpl for SanctumSettings {
 
             settings
         } else {
-            let settings = fs::read_to_string(path).expect("[-] Could not read settings file.");
-            serde_json::from_str(&settings).unwrap()
+            let settings = match fs::read_to_string(path) {
+                Ok(s) => s,
+                Err(e) => log.panic(&format!("Could not read settings file. {e}")),
+            };
+            match serde_json::from_str(&settings) {
+                Ok(s) => s,
+                Err(e) => log.panic(&format!("Could not deserialise string to SanctumSettings when reading. {e}")),
+            }
         };
 
         settings

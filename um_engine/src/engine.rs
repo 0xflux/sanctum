@@ -2,10 +2,9 @@
 
 use shared_std::{driver_manager::DriverState, file_scanner::{FileScannerState, ScanningLiveInfo}, settings::SanctumSettings};
 use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
-use crate::{driver_manager::SanctumDriverManager, settings::SanctumSettingsImpl};
+use crate::{driver_manager::SanctumDriverManager, settings::SanctumSettingsImpl, utils::{env::get_logged_in_username, log::{Log, LogLevel}}};
 use crate::filescanner::FileScanner;
 use crate::settings::get_setting_paths;
-use crate::utils::get_logged_in_username;
 
 /// The public API for the usermode engine which will run inside the Tauri GUI application.
 /// At present this interface does not hold state, and is used as a singleton in order to instruct the 
@@ -22,6 +21,7 @@ pub struct UmEngine {
     pub driver_manager: Arc<Mutex<SanctumDriverManager>>,   // the interface for managing the driver
     pub file_scanner: FileScanner,
     pub sanctum_settings: Arc<Mutex<SanctumSettings>>,
+    pub log: Log, // for logging events
 }
 
 impl UmEngine {
@@ -29,7 +29,9 @@ impl UmEngine {
     /// Initialises the usermode engine, ensuring the driver file exists in the image directory.
     pub async fn new() -> Self {
 
-        println!("[i] Sanctum usermode engine staring..");
+        let log = Log::init();
+
+        log.log(LogLevel::Info, "Sanctum usermode engine staring..");
 
         //
         // Config setup
@@ -52,6 +54,7 @@ impl UmEngine {
             driver_manager,
             file_scanner,
             sanctum_settings,
+            log,
         }
     }
 

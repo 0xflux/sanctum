@@ -1,5 +1,7 @@
 //! IOCTL functions for communicating with the driver from usermode.
 
+use crate::utils::log::LogLevel;
+
 use super::driver_manager::SanctumDriverManager;
 use core::str;
 use std::{ffi::c_void, slice::from_raw_parts};
@@ -24,16 +26,17 @@ impl SanctumDriverManager {
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                self.log.log(LogLevel::Error, &format!(
+                    "Handle to the driver is not initialised; please ensure you have started / installed the service. \
                     Unable to pass IOCTL. Handle: {:?}. Exiting the driver.", 
                     self.handle_via_path.handle
-                );
+                ));
                 
                 // stop the driver then panic
                 self.stop_driver();
 
                 // todo in the future have some gui option instead of a panic
-                panic!("[-] Unable to communicate with the driver to check version compatibility, please try again.");
+                self.log.panic("Unable to communicate with the driver to check version compatibility, please try again.")
             }
         }
 
@@ -55,11 +58,11 @@ impl SanctumDriverManager {
 
         // error checks
         if let Err(e) = result {
-            eprintln!("[-] Error fetching version result from driver. {e}");
+            self.log.log(LogLevel::Error, &format!("Error fetching version result from driver. {e}"));
             return false;
         }
         if bytes_returned == 0 {
-            eprintln!("[-] Error fetching version result from driver. Zero bytes returned from the driver.");
+            self.log.log(LogLevel::Error, "Error fetching version result from driver. Zero bytes returned from the driver.");
             return false;
         }
 
@@ -74,14 +77,19 @@ impl SanctumDriverManager {
 
         // todo improve how the error handling happens..
         if self.handle_via_path.handle.is_none() {
+
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+
+                self.log.log(LogLevel::Error, &format!(
+                    "Handle to the driver is not initialised; please ensure you have started / installed the service. \
                     Unable to pass IOCTL. Handle: {:?}", 
                     self.handle_via_path.handle
-                );
+                ));
+
                 return "".to_string();
+
             }
         }
 
@@ -116,19 +124,19 @@ impl SanctumDriverManager {
         };
 
         if let Err(e) = result {
-            eprintln!("Error from attempting IOCTL call. {e}");
+            self.log.log(LogLevel::Error, &format!("Error from attempting IOCTL call. {e}"));
             // no cleanup required, no additional handles or heap objects
             return "".to_string();
         }
 
-        println!("[+] Driver IOCTL sent. Bytes returned: {bytes_returned}");
-
         // parse out the result
         if let Ok(response) = str::from_utf8(&response[..bytes_returned as usize]) {
-            println!("[+] IOCTL - Bytes returned: {bytes_returned} response: {:#?}", response);
             return response.to_string();
         } else {
-            println!("[-] Error parsing response as UTF-8");
+            self.log.log(LogLevel::Error, &format!(
+                "Error parsing response as UTF-8. Raw data: {:?}",
+                &response[..bytes_returned as usize]
+            ));
             return "".to_string();
         }
     }
@@ -148,10 +156,11 @@ impl SanctumDriverManager {
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                self.log.log(LogLevel::Warning, &format!(
+                    "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
                     Unable to pass IOCTL. Handle: {:?}", 
                     self.handle_via_path.handle
-                );
+                ));
                 return None;
             }
         }
@@ -178,7 +187,9 @@ impl SanctumDriverManager {
             )
         };
         if let Err(e) = result {
-            eprintln!("[-] Error with calling SANC_IOCTL_DRIVER_GET_MESSAGE_LEN. {e}. Size of kernel msg: {}", size_of_kernel_msg);
+            self.log.log(LogLevel::Error, &format!(
+                "Error with calling SANC_IOCTL_DRIVER_GET_MESSAGE_LEN. {e}. Size of kernel msg: {}", size_of_kernel_msg
+            ));
             return None;
         }
 
@@ -208,27 +219,30 @@ impl SanctumDriverManager {
         };
 
         if let Err(e) = result {
-            eprintln!("[-] Error from attempting IOCTL call. {e}");
+            self.log.log(LogLevel::Error, &format!("Error from attempting IOCTL call. {e}"));
             return None;
         }
 
         if bytes_returned == 0 {
-            eprintln!("[-] No bytes returned from DeviceIOControl");
+            self.log.log(LogLevel::Error, "No bytes returned from DeviceIOControl");
             return None;
         }
 
         let response_serialised = match serde_json::from_slice::<DriverMessages>(&response) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("[-] Could not serialise response from driver messages. {e} Got: {:?}", response);
+
+                self.log.log(LogLevel::Error, &format!(
+                    "Could not serialise response from driver messages. {e} Got: {:?}", response
+                ));
+
                 return None;
             },
         };
 
-        println!("[i] Response serialised: {:?}", response_serialised);
+        self.log.log(LogLevel::Success, &format!("Messages from driver: {:?}", response_serialised));
 
-        // todo something with the data
-        return Some(response_serialised)
+        Some(response_serialised)
 
     }
 
@@ -244,10 +258,11 @@ impl SanctumDriverManager {
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                eprintln!("[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                self.log.log(LogLevel::Warning, &format!(
+                    "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
                     Unable to pass IOCTL. Handle: {:?}", 
                     self.handle_via_path.handle
-                );
+                ));
                 return;
             }
         }
@@ -258,7 +273,7 @@ impl SanctumDriverManager {
         let ver = "Hello from usermode!".as_bytes();        
         let mut message = SancIoctlPing::new();
         if ver.len() > message.capacity {
-            eprintln!("[-] Message too long for buffer.");
+            self.log.log(LogLevel::Error, "Message too long for buffer");
             return;
         }
 
@@ -285,19 +300,21 @@ impl SanctumDriverManager {
         };
 
         if let Err(e) = result {
-            eprintln!("[-] Error from attempting IOCTL call. {e}");
+            self.log.log(LogLevel::Error, &format!("[-] Error from attempting IOCTL call. {e}"));
             return;
         }
 
         // parse out the result
         if bytes_returned == 0 {
-            eprintln!("[-] No bytes returned from DeviceIOControl");
+            self.log.log(LogLevel::Error, "No bytes returned from DeviceIOControl");
             return;
         }
 
         let constructed = unsafe {from_raw_parts(response.version.as_ptr(), response.str_len)};
 
-        println!("[+] Response from driver: {}, {:?}", response.received, std::str::from_utf8(constructed));
+        self.log.log(LogLevel::Success, &format!(
+            "Response from driver: {}, {:?}", response.received, std::str::from_utf8(constructed)
+        ));
 
     }
 }
