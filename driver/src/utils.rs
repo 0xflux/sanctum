@@ -150,3 +150,11 @@ pub fn unicode_to_string(input: *const UNICODE_STRING) -> Result<String, DriverE
     let slice = unsafe { core::slice::from_raw_parts(ansi.Buffer as *const u8, ansi.Length as usize) };
     Ok(String::from_utf8_lossy(slice).to_string())
 }
+
+pub struct Log {}
+
+impl Log {
+    pub fn new() -> Self {
+        Log {}
+    }
+}

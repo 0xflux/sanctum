@@ -21,7 +21,7 @@ pub struct UmIpc{}
 impl UmIpc {
 
     pub async fn listen(engine: Arc<UmEngine>) -> Result<(), Box<dyn std::error::Error>> {
-        let logger = Log::init();
+        let logger = Log::new();
         logger.log(LogLevel::Info, &format!("Trying to start IPC server at {}...", PIPE_NAME));
 
         // set up IPC
@@ -47,7 +47,7 @@ impl UmIpc {
     
             tokio::spawn(async move {
                 let mut buffer = vec![0; 1024];
-                let logger = Log::init();
+                let logger = Log::new();
     
                 // read the request
                 match client.read(&mut buffer).await {

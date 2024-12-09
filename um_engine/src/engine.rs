@@ -29,7 +29,7 @@ impl UmEngine {
     /// Initialises the usermode engine, ensuring the driver file exists in the image directory.
     pub async fn new() -> Self {
 
-        let log = Log::init();
+        let log = Log::new();
 
         log.log(LogLevel::Info, "Sanctum usermode engine staring..");
 

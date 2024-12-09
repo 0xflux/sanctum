@@ -355,7 +355,7 @@ impl Drop for ServiceControlManager {
             return;
         }
 
-        let log = Log::init();
+        let log = Log::new();
 
         if self.mgr_handle.unwrap().0 != null_mut() {
             if let Err(e) = unsafe { CloseServiceHandle(self.mgr_handle.unwrap()) } {

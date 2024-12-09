@@ -19,7 +19,7 @@ pub enum LogLevel {
 }
 
 impl Log {
-    pub fn init() -> Self {
+    pub fn new() -> Self {
         //
         // check for log file
         //

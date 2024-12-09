@@ -11,7 +11,7 @@ pub trait SanctumSettingsImpl {
 
 impl SanctumSettingsImpl for SanctumSettings {
     fn load() -> Self {       
-        let log = Log::init();
+        let log = Log::new();
 
         let username = get_logged_in_username().unwrap();
         let paths = get_setting_paths(&username);

@@ -53,7 +53,7 @@ impl FileScanner {
     /// Construct a new instance of the FileScanner with no parameters.
     pub async fn new() -> Result<Self, std::io::Error> {
 
-        let log = Log::init();
+        let log = Log::new();
 
         //
         // ingest latest IOC hash list

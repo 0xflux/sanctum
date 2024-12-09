@@ -39,7 +39,7 @@ impl SanctumDriverManager {
         // Generate the UNICODE_STRING values for the device and symbolic name
         //
         let device_um_symbolic_link_name = DRIVER_UM_NAME.to_u16_vec();
-        let log = Log::init();
+        let log = Log::new();
 
         let appdata = match std::env::var("APPDATA") {
             Ok(a) => a,
