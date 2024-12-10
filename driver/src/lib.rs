@@ -73,14 +73,7 @@ pub unsafe extern "C" fn configure_driver(
     DRIVER_MESSAGES_CACHE.store(Box::into_raw(messages_cache), Ordering::SeqCst);
 
 
-    // Attempt to dereference the DRIVER_MESSAGES global; if the dereference is successful,
-    // add the relevant data to the queue
-    if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
-        let obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
-        obj.add_message_to_queue(format!("Starting Sanctum driver... Version: {}", VERSION_DRIVER));
-    } else {
-        println!("[sanctum] [-] Driver messages is null");
-    }
+    log.log_to_userland(format!("Starting Sanctum driver... Version: {}", VERSION_DRIVER));
 
     //
     // Configure the strings

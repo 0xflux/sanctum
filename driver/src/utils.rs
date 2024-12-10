@@ -1,11 +1,11 @@
-use core::{iter::once, ptr::null_mut};
+use core::{iter::once, ptr::null_mut, sync::atomic::Ordering};
 
 use alloc::{vec, format, string::{String, ToString}, vec::Vec};
 use shared_no_std::constants::SanctumVersion;
 use wdk::println;
-use wdk_sys::{ntddk::{KeGetCurrentIrql, RtlInitUnicodeString, RtlUnicodeStringToAnsiString, ZwClose, ZwCreateFile, ZwWriteFile}, FALSE, FILE_APPEND_DATA, FILE_ATTRIBUTE_NORMAL, FILE_OPEN_IF, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, IO_STATUS_BLOCK, OBJECT_ATTRIBUTES, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, PASSIVE_LEVEL, PHANDLE, POBJECT_ATTRIBUTES, STATUS_SUCCESS, STRING, UNICODE_STRING};
+use wdk_sys::{ntddk::{KeGetCurrentIrql, RtlInitUnicodeString, RtlUnicodeStringToAnsiString, ZwClose, ZwCreateFile, ZwWriteFile}, FALSE, FILE_APPEND_DATA, FILE_ATTRIBUTE_NORMAL, FILE_OPEN_IF, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT, GENERIC_WRITE, IO_STATUS_BLOCK, OBJECT_ATTRIBUTES, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, PASSIVE_LEVEL, PHANDLE, POBJECT_ATTRIBUTES, STATUS_SUCCESS, STRING, UNICODE_STRING};
 
-use crate::ffi::InitializeObjectAttributes;
+use crate::{ffi::InitializeObjectAttributes, DRIVER_MESSAGES};
 
 #[derive(Debug)]
 /// A custom error enum for the Sanctum driver
@@ -172,7 +172,7 @@ pub enum LogLevel {
 impl<'a> Log<'a> {
     pub fn new() -> Self {
         Log {
-            log_path: r"\SystemRoot\sanctum\sanctum_driver.log"
+            log_path: r"\SystemRoot\sanctum_driver.log"
         }
     }
 
@@ -208,6 +208,7 @@ impl<'a> Log<'a> {
         };
         if result.is_err() {
             println!("[sanctum] [-] Error calling InitializeObjectAttributes. No log event taking place..");
+            self.log_to_userland("[-] Error calling InitializeObjectAttributes. No log event taking place..".to_string());
             return;
         }
 
@@ -217,6 +218,7 @@ impl<'a> Log<'a> {
         unsafe {
             if KeGetCurrentIrql() as u32 != PASSIVE_LEVEL {
                 println!("[sanctum] [-] IRQL level too high to log event.");
+                self.log_to_userland("[-] IRQL level too high to log event.".to_string());
                 return;
             }
         }
@@ -230,7 +232,7 @@ impl<'a> Log<'a> {
         let result = unsafe {
             ZwCreateFile(
                 &mut handle as *mut _ as *mut _,
-                GENERIC_WRITE | FILE_APPEND_DATA,
+                FILE_APPEND_DATA,
                 &mut oa,
                 &mut io_status_block,
                 null_mut(),
@@ -244,7 +246,8 @@ impl<'a> Log<'a> {
         };
 
         if result != STATUS_SUCCESS || handle.is_null() {
-            println!("[sanctum] [-] result of ZwCreateFile was not success - result: {result}. Returning.");
+            println!("[sanctum] [-] Result of ZwCreateFile was not success - result: {result}. Returning.");
+            self.log_to_userland(format!("Result of ZwCreateFile was not success - result: {result}. Returning."));
             unsafe {
                 if !handle.is_null() {
                     let _ = ZwClose(*handle);
@@ -261,7 +264,7 @@ impl<'a> Log<'a> {
         // convert the input message to a vector we can pass into the write file
         // heap allocating as the ZwWriteFile requires us to have a mutable pointer, so we
         // cannot use a &str.as_mut_ptr()
-        let buf: Vec<u8> = msg.as_bytes().iter().cloned().collect();
+        let buf: Vec<u8> = msg.as_bytes().iter().chain("\r\n".as_bytes().iter()).cloned().collect();
 
         let result = unsafe {
             ZwWriteFile(
@@ -279,6 +282,7 @@ impl<'a> Log<'a> {
 
         if result != STATUS_SUCCESS {
             println!("[sanctum] [-] Failed writing file. Code: {result}");
+            self.log_to_userland(format!(" [-] Failed writing file. Code: {result}"));
             unsafe {
                 if !handle.is_null() {
                     let _ = ZwClose(*handle);
@@ -300,7 +304,12 @@ impl<'a> Log<'a> {
     }
 
     /// Send a message to userland from the kernel, via the DriverMessages feature
-    pub fn log_to_userland() {
-        
+    pub fn log_to_userland(&self, msg: String) {
+        if !DRIVER_MESSAGES.load(Ordering::SeqCst).is_null() {
+            let obj = unsafe { &mut *DRIVER_MESSAGES.load(Ordering::SeqCst) };
+            obj.add_message_to_queue(msg);
+        } else {
+            println!("[sanctum] [-] Unable to log message for the attention of userland, {}. The global DRIVER_MESSAGES was null.", msg);
+        }
     }
 }

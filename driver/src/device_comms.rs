@@ -1,11 +1,11 @@
 use core::{ffi::c_void, mem, ptr::null_mut, slice, sync::atomic::Ordering};
 
-use alloc::{string::String, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::{DriverMessages, SancIoctlPing}};
 use wdk::println;
 use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
-use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
+use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError, Log}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
 
 /// DriverMessagesWithMutex object which contains a spinlock to allow for mutable access to the queue.
 /// This object should be used to safely manage access to the inner DriverMessages which contains 
@@ -489,6 +489,8 @@ pub fn ioctl_check_driver_compatibility(
     // check whether we are compatible
     let response = check_driver_version(input_data);
     println!("[sanctum] [i] Client version: {}.{}.{}, is compatible with driver version: {}.", input_data.major, input_data.minor, input_data.patch, response);
+    let log = Log::new();
+    log.log_to_userland(format!("[i] Client version: {}.{}.{}, is compatible with driver version: {}.", input_data.major, input_data.minor, input_data.patch, response));
 
     // prepare the data
     let res_size = core::mem::size_of_val(&response) as u64;
