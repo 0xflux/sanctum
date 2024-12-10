@@ -2,7 +2,7 @@
 
 use core::{ffi::c_void, ptr::null_mut};
 
-use wdk_sys::{ntddk::KeInitializeEvent, FALSE, FAST_MUTEX, FM_LOCK_BIT, HANDLE_PTR, OBJECT_ATTRIBUTES, PIO_STACK_LOCATION, PIRP, POBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, PUNICODE_STRING, ULONG, _EVENT_TYPE::SynchronizationEvent};
+use wdk_sys::{ntddk::KeInitializeEvent, FALSE, FAST_MUTEX, FM_LOCK_BIT, HANDLE, HANDLE_PTR, OBJECT_ATTRIBUTES, PIO_STACK_LOCATION, PIRP, POBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, PUNICODE_STRING, ULONG, _EVENT_TYPE::SynchronizationEvent};
 
 // #[link(name = "ntoskrnl")]
 // extern "system" {
@@ -39,7 +39,7 @@ pub unsafe fn InitializeObjectAttributes(
     p: POBJECT_ATTRIBUTES, // out
     n: PUNICODE_STRING, //in
     a: ULONG, // in
-    r: *mut c_void, // in
+    r: HANDLE, // in
     s: PSECURITY_DESCRIPTOR, // in opt
 ) -> Result<(), ()>{
     // check the validity of the OBJECT_ATTRIBUTES pointer
