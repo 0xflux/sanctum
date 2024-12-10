@@ -17,7 +17,7 @@ use alloc::{boxed::Box, format};
 use ffi::IoGetCurrentIrpStackLocation;
 use device_comms::{ioctl_check_driver_compatibility, ioctl_handler_get_kernel_msg_len, ioctl_handler_ping, ioctl_handler_ping_return_struct, ioctl_handler_send_kernel_msgs_to_userland, DriverMessagesWithMutex};
 use shared_no_std::{constants::{DOS_DEVICE_NAME, NT_DEVICE_NAME, VERSION_DRIVER}, ioctl::{SANC_IOCTL_CHECK_COMPATIBILITY, SANC_IOCTL_DRIVER_GET_MESSAGES, SANC_IOCTL_DRIVER_GET_MESSAGE_LEN, SANC_IOCTL_PING, SANC_IOCTL_PING_WITH_STRUCT}};
-use utils::{ToU16Vec, ToUnicodeString};
+use utils::{Log, LogLevel, ToU16Vec, ToUnicodeString};
 use wdk::{nt_success, println};
 use wdk_sys::{
     ntddk::{IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink, IofCompleteRequest, PsSetCreateProcessNotifyRoutineEx}, DEVICE_OBJECT, DO_BUFFERED_IO, DRIVER_OBJECT, FALSE, FILE_DEVICE_SECURE_OPEN, FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_DEVICE_CONTROL, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT, PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, TRUE, _IO_STACK_LOCATION
@@ -59,6 +59,8 @@ pub unsafe extern "C" fn configure_driver(
     _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
     println!("[sanctum] [i] running sanctum_entry...");
+    let log = Log::new();
+    log.log(LogLevel::Info, "Sanctum starting...");
 
     //
     // Initialise the global DRIVER_MESSAGES variable

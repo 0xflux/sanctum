@@ -1,6 +1,8 @@
 // FFI for functions not yet implemented in the Rust Windows Driver project
 
-use wdk_sys::{ntddk::KeInitializeEvent, FALSE, FAST_MUTEX, FM_LOCK_BIT, PIO_STACK_LOCATION, PIRP, _EVENT_TYPE::SynchronizationEvent};
+use core::{ffi::c_void, ptr::null_mut};
+
+use wdk_sys::{ntddk::KeInitializeEvent, FALSE, FAST_MUTEX, FM_LOCK_BIT, HANDLE_PTR, OBJECT_ATTRIBUTES, PIO_STACK_LOCATION, PIRP, POBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, PUNICODE_STRING, ULONG, _EVENT_TYPE::SynchronizationEvent};
 
 // #[link(name = "ntoskrnl")]
 // extern "system" {
@@ -24,4 +26,33 @@ pub unsafe fn ExInitializeFastMutex(kmutex: *mut FAST_MUTEX) {
     (*kmutex).Owner = core::ptr::null_mut();
     (*kmutex).Contention = 0;
     KeInitializeEvent(&mut (*kmutex).Event, SynchronizationEvent, FALSE as _)
+}
+
+/// The InitializeObjectAttributes macro initializes the opaque OBJECT_ATTRIBUTES structure, 
+/// which specifies the properties of an object handle to routines that open handles.
+/// 
+/// # Returns
+/// This function will return an Err if the POBJECT_ATTRIBUTES is null. Otherwise, it will return
+/// Ok(())
+#[allow(non_snake_case)]
+pub unsafe fn InitializeObjectAttributes(
+    p: POBJECT_ATTRIBUTES, // out
+    n: PUNICODE_STRING, //in
+    a: ULONG, // in
+    r: *mut c_void, // in
+    s: PSECURITY_DESCRIPTOR, // in opt
+) -> Result<(), ()>{
+    // check the validity of the OBJECT_ATTRIBUTES pointer
+    if p.is_null() {
+        return Err(());
+    }
+
+    (*p).Length = size_of::<OBJECT_ATTRIBUTES>() as u32;
+    (*p).RootDirectory = r;
+    (*p).Attributes = a;
+    (*p).ObjectName = n;
+    (*p).SecurityDescriptor = s;
+    (*p).SecurityQualityOfService = null_mut();
+
+    Ok(())
 }
