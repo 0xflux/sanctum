@@ -28,9 +28,17 @@ impl Core {
                     // todo
 
                     // cache messages 
-                    // add process creations to a hashmap
+                    // add process creations to a hashmap (ProcessMonitor struct)
 
-                    // todo long term: thread creation & handle re quests metadata to the abv hashmap
+                    /*
+                        todo long term: 
+                            - thread creation 
+                            - handle requests
+                            - change of handle type (e.g. trying to evade detection)
+                            - is the process doing bad things itself (allocating foreign mem)
+                            
+                        ^ to the abv hashmap
+                    */
                 }
 
                 sleep(Duration::from_millis(core.driver_poll_rate));
