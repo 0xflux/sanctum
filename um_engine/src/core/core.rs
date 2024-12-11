@@ -21,9 +21,16 @@ impl Core {
         // Enter the polling & decision making loop, this here is the core / engine of the usermode engine.
         //
         loop {
-            let x = engine.driver_manager.lock().unwrap().ioctl_get_driver_messages();
-                if x.is_some() {
-                    println!("x: {:?}", x);
+            // contact the driver and get any messages from the kernel 
+            let driver_response = engine.driver_manager.lock().unwrap().ioctl_get_driver_messages();
+                if driver_response.is_some() {
+                    // println!("x: {:?}", driver_response);
+                    // todo
+
+                    // cache messages 
+                    // add process creations to a hashmap
+
+                    // todo long term: thread creation & handle re quests metadata to the abv hashmap
                 }
 
                 sleep(Duration::from_millis(core.driver_poll_rate));
