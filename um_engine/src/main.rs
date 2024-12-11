@@ -6,9 +6,8 @@
 
 use gui_communication::ipc::UmIpc;
 use engine::UmEngine;
-use tokio::time::sleep;
-use std::{sync::Arc, time::Duration};
-
+use core::core::Core;
+use std::sync::Arc;
 mod engine;
 mod driver_manager;
 mod strings;
@@ -16,6 +15,7 @@ mod settings;
 mod filescanner;
 mod utils;
 mod gui_communication;
+mod core;
 
 
 #[tokio::main]
@@ -31,15 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // be handled below
     //
     tokio::spawn(async move {
-        // todo move this to a core module
-        loop {
-            let x = ec.driver_manager.lock().unwrap().ioctl_get_driver_messages();
-            if x.is_some() {
-                println!("x: {:?}", x);
-            }
-
-            sleep(Duration::from_millis(80)).await;
-        }
+        Core::start_core(ec).await;
     });
 
     //
