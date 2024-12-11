@@ -21,7 +21,7 @@ mod core;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    // set up the engine
+    // set up the engine and make any Arc clones required for top level threads
     let engine = Arc::new(UmEngine::new().await);
     let ec = engine.clone();
 
