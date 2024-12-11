@@ -11,8 +11,6 @@ impl Core {
     /// Starts the core of the usermode engine; kicking off the frequent polling of the 
     pub async fn start_core(engine: Arc<UmEngine>) -> ! {
 
-        println!("Hello??");
-
         // create a local self contained instance of Core, as we don't need to instantiate 
         // the core outside of this entry function
         let core = Core {
@@ -30,6 +28,6 @@ impl Core {
 
                 sleep(Duration::from_millis(core.driver_poll_rate));
         }
-
     }
+
 }
