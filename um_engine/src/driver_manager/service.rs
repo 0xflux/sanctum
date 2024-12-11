@@ -279,7 +279,7 @@ impl SanctumDriverManager {
         match handle {
             Ok(h) => self.handle_via_path.handle = Some(h),
             Err(e) => {
-                self.log.log(LogLevel::Error, &format!("Unable to get handle to driver via its registry path, error: {e}."));
+                // self.log.log(LogLevel::Error, &format!("Unable to get handle to driver via its registry path, error: {e}."));
                 return false;
             }
         }

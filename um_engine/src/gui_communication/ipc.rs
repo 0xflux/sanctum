@@ -187,9 +187,9 @@ pub fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>) -> Optio
         "ioctl_ping_driver" => {
             to_value(engine_clone.ioctl_ping_driver()).unwrap()
         },
-        "driver_collect_knl_dbg_msg" => {
-            to_value(engine_clone.driver_manager.lock().unwrap().ioctl_get_driver_messages()).unwrap()
-        }
+        // "driver_collect_knl_dbg_msg" => {
+        //     to_value(engine_clone.driver_manager.lock().unwrap().ioctl_get_driver_messages()).unwrap()
+        // }
 
 
         //

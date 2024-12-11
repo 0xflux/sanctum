@@ -82,11 +82,11 @@ impl SanctumDriverManager {
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
 
-                self.log.log(LogLevel::Error, &format!(
-                    "Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}", 
-                    self.handle_via_path.handle
-                ));
+                // self.log.log(LogLevel::Error, &format!(
+                //     "Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                //     Unable to pass IOCTL. Handle: {:?}", 
+                //     self.handle_via_path.handle
+                // ));
 
                 return "".to_string();
 
@@ -156,11 +156,11 @@ impl SanctumDriverManager {
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                self.log.log(LogLevel::Warning, &format!(
-                    "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}", 
-                    self.handle_via_path.handle
-                ));
+                // self.log.log(LogLevel::Warning, &format!(
+                //     "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                //     Unable to pass IOCTL. Handle: {:?}", 
+                //     self.handle_via_path.handle
+                // ));
                 return None;
             }
         }
@@ -186,14 +186,7 @@ impl SanctumDriverManager {
                 None,
             )
         };
-        if let Err(e) = result {
-            self.log.log(LogLevel::Error, &format!(
-                "Error with calling SANC_IOCTL_DRIVER_GET_MESSAGE_LEN. {e}. Size of kernel msg: {}", size_of_kernel_msg
-            ));
-            return None;
-        }
-
-        if size_of_kernel_msg == 0 {
+        if result.is_err() || size_of_kernel_msg == 0 {
             return None;
         }
 
@@ -258,11 +251,11 @@ impl SanctumDriverManager {
             // try 1 more time
             self.init_handle_via_registry();
             if self.handle_via_path.handle.is_none() {
-                self.log.log(LogLevel::Warning, &format!(
-                    "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
-                    Unable to pass IOCTL. Handle: {:?}", 
-                    self.handle_via_path.handle
-                ));
+                // self.log.log(LogLevel::Warning, &format!(
+                //     "[-] Handle to the driver is not initialised; please ensure you have started / installed the service. \
+                //     Unable to pass IOCTL. Handle: {:?}", 
+                //     self.handle_via_path.handle
+                // ));
                 return;
             }
         }
