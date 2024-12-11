@@ -36,11 +36,11 @@ pub unsafe fn ExInitializeFastMutex(kmutex: *mut FAST_MUTEX) {
 /// Ok(())
 #[allow(non_snake_case)]
 pub unsafe fn InitializeObjectAttributes(
-    p: POBJECT_ATTRIBUTES, // out
-    n: PUNICODE_STRING, //in
-    a: ULONG, // in
-    r: HANDLE, // in
-    s: PSECURITY_DESCRIPTOR, // in opt
+    p: POBJECT_ATTRIBUTES,
+    n: PUNICODE_STRING,
+    a: ULONG,
+    r: HANDLE,
+    s: PSECURITY_DESCRIPTOR,
 ) -> Result<(), ()>{
     // check the validity of the OBJECT_ATTRIBUTES pointer
     if p.is_null() {
