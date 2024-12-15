@@ -2,7 +2,7 @@ use core::{ffi::c_void, mem, ptr::null_mut, slice, sync::atomic::Ordering};
 
 use alloc::{format, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
-use shared_no_std::{constants::SanctumVersion, driver_ipc::ProcessStarted, ioctl::{DriverMessages, SancIoctlPing}};
+use shared_no_std::{constants::SanctumVersion, driver_ipc::{ProcessStarted, ProcessTerminated}, ioctl::{DriverMessages, SancIoctlPing}};
 use wdk::println;
 use wdk_sys::{ntddk::{ExAcquireFastMutex, ExReleaseFastMutex, KeGetCurrentIrql, RtlCopyMemoryNonTemporal}, APC_LEVEL, FAST_MUTEX, NTSTATUS, PIRP, STATUS_BUFFER_ALL_ZEROS, STATUS_INVALID_BUFFER_SIZE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, _IO_STACK_LOCATION};
 use crate::{ffi::ExInitializeFastMutex, utils::{check_driver_version, DriverError, Log}, DRIVER_MESSAGES, DRIVER_MESSAGES_CACHE};
@@ -89,6 +89,35 @@ impl DriverMessagesWithMutex {
     }
 
 
+    /// Adds a terminated process to the queue.
+    /// 
+    /// This function will wait for an acquisition of the spin lock to continue and will block
+    /// until that point.
+    pub fn add_process_termination_to_queue(&mut self, data: ProcessTerminated)
+     {
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql != 0 {
+            println!("[sanctum] [-] IRQL is not PASSIVE_LEVEL: {}", irql);
+            return;
+        }
+
+        unsafe { ExAcquireFastMutex(&mut self.lock) };
+
+        let irql = unsafe { KeGetCurrentIrql() };
+        if irql > APC_LEVEL as u8 {
+            println!("[sanctum] [-] IRQL is not APIC_LEVEL: {}", irql);
+            unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+            return;
+        }
+
+        self.is_empty = false;
+        self.data.process_terminations.push(data);
+        
+        unsafe { ExReleaseFastMutex(&mut self.lock) }; 
+    }
+
+
     /// Extract all data out of the queue if there is data.
     /// 
     /// # Returns
@@ -117,7 +146,7 @@ impl DriverMessagesWithMutex {
         }
         
         //
-        // Using mem::take now  seems safe against kernel panics; we were having some issues
+        // Using mem::take now seems safe against kernel panics; we were having some issues
         // previous with this, leading to IRQL_NOT_LESS_OR_EQUAL bsod. That was likely a programming
         // error as opposed to a safety error with mem::take. If further bsod's occur around mem::take,
         // try swapping to mem::swap; however, the core functionality of both should be the same.
@@ -137,10 +166,12 @@ impl DriverMessagesWithMutex {
         self.is_empty = false;
         self.data.messages.append(&mut q.messages);
         self.data.process_creations.append(&mut q.process_creations);
+        self.data.process_terminations.append(&mut q.process_terminations);
 
         let tmp = serde_json::to_vec(&DriverMessages{
             messages: self.data.messages.clone(),
             process_creations: self.data.process_creations.clone(),
+            process_terminations: self.data.process_terminations.clone(),
         });
 
         let len = match tmp {

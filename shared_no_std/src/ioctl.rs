@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::driver_ipc::ProcessStarted;
+use crate::driver_ipc::{ProcessStarted, ProcessTerminated};
 
 extern crate alloc;
 
@@ -74,12 +74,16 @@ impl Default for SancIoctlPing<> {
  /// The actual type within DriverMessagesWithMutex which contains the data.
 /// 
 /// # Warning
-/// 
 /// This struct definition is NOT shared between the driver and usermode code due to
 /// the requirement for Vec (alloc vs std). Therefore, this should be manually defined and
 /// updated in the usermode code as it will use a different allocator.
+/// 
+/// # Warning
+/// When adding new fields to this, ensure you also update BOTH the .append sections and 
+/// serde_json::to_vec in `add_existing_queue` for the data to properly be sent to userland.
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct DriverMessages {
     pub messages: alloc::vec::Vec<alloc::string::String>,
     pub process_creations: alloc::vec::Vec<ProcessStarted>,
+    pub process_terminations: alloc::vec::Vec<ProcessTerminated>,
 }
