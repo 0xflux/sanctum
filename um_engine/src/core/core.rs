@@ -1,28 +1,43 @@
-use std::{ffi::CStr, sync::Arc, thread::sleep, time::Duration};
+use std::{ffi::CStr, sync::Arc, time::Duration};
 
 use shared_no_std::driver_ipc::ProcessStarted;
+use tokio::{sync::Mutex, time::sleep};
 use windows::Win32::{Foundation::{CloseHandle, GetLastError}, System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPALL}};
 
 use crate::{engine::UmEngine, utils::log::{Log, LogLevel}};
 
 use super::process_monitor::ProcessMonitor;
 
+/// The core struct contains information on the core of the usermode engine where decisions are being made, and directly communicates
+/// with the kernel.
+/// 
+/// # Components
+/// 
+/// - `driver_poll_rate`: the poll rate in milliseconds that the kernel will be (approximately) queried. The 
+/// approximation is because the polling / decision making loop is not asynchronous and other decision making
+/// takes place prior to the poll rate sleep time.
+/// - `driver_dbg_message_cache`: a temporary cache of messages which are returned from the kernel which the 
+/// GUI can request.
+#[derive(Debug, Default)]
 pub struct Core {
     driver_poll_rate: u64,
+    driver_dbg_message_cache: Vec<String>,
 }
 
 
 impl Core {
-    /// Starts the core of the usermode engine; kicking off the frequent polling of the 
-    pub async fn start_core(engine: Arc<UmEngine>) -> ! {
 
-        println!("Core starting");
+    /// Initialises a new Core instance from a poll rate in milliseconds.
+    pub fn from(poll_rate: u64) -> Self {
+        let mut core = Core::default();
+        
+        core.driver_poll_rate = poll_rate;
+        
+        core
+    }
 
-        // create a local self contained instance of Core, as we don't need to instantiate 
-        // the core outside of this entry function
-        let core = Core {
-            driver_poll_rate: 50,
-        };
+    /// Starts the core of the usermode engine; kicking off the frequent polling of the driver, and conducts relevant decision making
+    pub async fn start_core(core: Arc<Mutex<Self>>, engine: Arc<UmEngine>) -> ! {
 
         let mut processes = ProcessMonitor::new();
 
@@ -52,11 +67,11 @@ impl Core {
             };
             
             //
-            // If we have new message(s) from the driver, process them in userland as appropriate 
+            // If we have new message(s) / emissions from the driver, process them in userland as appropriate 
             //
             if driver_response.is_some() {
                 // first deal with process terminations to prevent trying to add to an old process id if there is a duplicate
-                let driver_messages = driver_response.unwrap();
+                let mut driver_messages = driver_response.unwrap();
                 let process_terminations = driver_messages.process_terminations;
                 if !process_terminations.is_empty() {
                     for t in process_terminations {
@@ -74,7 +89,15 @@ impl Core {
                     }
                 }
 
-                // cache messages 
+                // cache messages
+                {
+                    let mut core_lock = core.lock().await;
+                    println!("Driver messages: {:?}", core_lock.driver_dbg_message_cache);
+                    if !driver_messages.messages.is_empty() {
+                        core_lock.driver_dbg_message_cache.append(&mut driver_messages.messages);
+                    }
+                }
+
                 // add process creations to a hashmap (ProcessMonitor struct)
 
                 /*
@@ -88,8 +111,32 @@ impl Core {
                 */
             }
 
-            sleep(Duration::from_millis(core.driver_poll_rate));
+            {
+                let core_lock = core.lock().await;
+                sleep(Duration::from_millis(core_lock.driver_poll_rate)).await;
+            }
+            
         }
+    }
+
+
+    /// Gets the cached driver messages for use in the GUI
+    /// 
+    /// # Returns
+    /// 
+    /// If there are no messages cached, None will be returned. Otherwise, a vector of the messages
+    /// will be returned to the caller.
+    pub async fn get_cached_driver_messages(core: Arc<Mutex<Self>>) -> Option<Vec<String>> {
+        let mut core_lock = core.lock().await;
+
+        if core_lock.driver_dbg_message_cache.is_empty() {
+            return None;
+        }
+
+        let tmp = core_lock.driver_dbg_message_cache.clone();
+        core_lock.driver_dbg_message_cache.clear();
+        
+        Some(tmp)
     }
 
 }

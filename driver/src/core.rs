@@ -38,8 +38,6 @@ pub unsafe extern "C" fn core_callback_notify_ps(process: PEPROCESS, pid: HANDLE
             parent_pid,
             pid,
         };
-
-        // println!("[sanctum] [i] Process started: {:?}.", process_started);
         
         // Attempt to dereference the DRIVER_MESSAGES global; if the dereference is successful,
         // add the relevant data to the queue
