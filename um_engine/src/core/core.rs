@@ -21,7 +21,7 @@ impl Core {
         // create a local self contained instance of Core, as we don't need to instantiate 
         // the core outside of this entry function
         let core = Core {
-            driver_poll_rate: 500,
+            driver_poll_rate: 50,
         };
 
         let mut processes = ProcessMonitor::new();
@@ -73,8 +73,6 @@ impl Core {
                         }
                     }
                 }
-
-                println!("{:?}", processes);
 
                 // cache messages 
                 // add process creations to a hashmap (ProcessMonitor struct)
