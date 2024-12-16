@@ -2,9 +2,14 @@ use std::collections::HashMap;
 
 use shared_no_std::driver_ipc::ProcessStarted;
 
+use crate::utils::log::Log;
+
 /// The ProcessMonitor is responsible for monitoring all processes running; this 
 /// structure holds a hashmap of all processes by the pid as an integer, and 
 /// the data within is a MonitoredProcess containing the details
+/// 
+/// The key of processes hashmap is the pid, which is duplicated inside the Process
+/// struct.
 #[derive(Debug)]
 pub struct ProcessMonitor {
     processes: HashMap<u64, Process>
@@ -25,6 +30,7 @@ pub struct Process {
     commandline_args: String,
     risk_score: u8,
     allow_listed: bool, // whether the application is allowed to exist without monitoring
+    sanctum_protected_process: bool, // scc (sanctum protected process) defines processes which require additional protections from access / abuse, such as lsass.exe.
 }
 
 impl ProcessMonitor {
@@ -54,6 +60,7 @@ impl ProcessMonitor {
             commandline_args: proc.command_line.clone(),
             risk_score: 0,
             allow_listed: false,
+            sanctum_protected_process: false,
         });
 
         Ok(())
@@ -61,5 +68,13 @@ impl ProcessMonitor {
 
     pub fn remove_process(&mut self, pid: u64) {
         self.processes.remove(&pid);
+    }
+
+    /// Extends the processes hashmap through the std extend function on the inner processes hashmap
+    pub fn extend_processes(&mut self, foreign_hashmap: ProcessMonitor) {
+        self.processes.extend(foreign_hashmap.processes);
+
+        let logger = Log::new();
+        logger.log(crate::utils::log::LogLevel::Info, &format!("Discovered {} running processes on startup.", self.processes.len()));
     }
 }

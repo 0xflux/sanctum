@@ -1,6 +1,7 @@
-use std::{sync::Arc, thread::sleep, time::Duration};
+use std::{ffi::CStr, sync::Arc, thread::sleep, time::Duration};
 
-use shared_no_std::ioctl::DriverMessages;
+use shared_no_std::{driver_ipc::ProcessStarted, ioctl::DriverMessages};
+use windows::Win32::{Foundation::{CloseHandle, GetLastError}, System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPALL}};
 
 use crate::{engine::UmEngine, utils::log::{Log, LogLevel}};
 
@@ -26,6 +27,19 @@ impl Core {
         let mut processes = ProcessMonitor::new();
 
         let logger = Log::new();
+
+        //
+        // To start with, we will snapshot all running processes and then add them to the active processes.
+        // there is possible a short time window where processes are created / terminated, which may cause
+        // a zone of 'invisibility' at this point in time, but this should be fixed in the future when
+        // we receive handles / changes to processes, if they don't exist, they should be created then.
+        // todo - marker for info re above.
+        //
+        let snapshot_processes = snapshot_all_processes();
+
+        // extend the newly created local processes type from the results of the snapshot
+        processes.extend_processes(snapshot_processes);
+        
 
         //
         // Enter the polling & decision making loop, this here is the core / engine of the usermode engine.
@@ -80,4 +94,72 @@ impl Core {
         }
     }
 
+}
+
+/// Enumerate all processes and add them to the active process monitoring hashmap.
+fn snapshot_all_processes() -> ProcessMonitor {
+
+    let logger = Log::new();
+    let mut all_processes = ProcessMonitor::new();
+
+    let snapshot = match unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0)} {
+        Ok(s) => {
+            if s.is_invalid() {
+                logger.panic(&format!("Unable to create snapshot of all processes. GLE: {}", unsafe { GetLastError().0 }));
+            } else {
+                s
+            }
+        },
+        Err(_) => {
+            // not really bothered about the error at this stage
+            logger.panic(&format!("Unable to create snapshot of all processes. GLE: {}", unsafe { GetLastError().0 }));
+        },
+    };
+
+    let mut process_entry = PROCESSENTRY32::default();
+    process_entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
+
+    if unsafe { Process32First(snapshot,&mut process_entry)}.is_ok() {
+        loop {
+            // 
+            // Get the process name
+            //
+            let current_process_name_ptr = process_entry.szExeFile.as_ptr() as *const _;
+            let current_process_name = match unsafe { CStr::from_ptr(current_process_name_ptr) }.to_str() {
+                Ok(process) => process.to_string(),
+                Err(e) => {
+                    logger.log(LogLevel::Error, &format!("Error converting process name. {e}"));
+                    continue;
+                }
+            };
+
+            logger.log(LogLevel::Success, &format!("Process name: {}, pid: {}, parent: {}", current_process_name, process_entry.th32ProcessID, process_entry.th32ParentProcessID));
+            let process = ProcessStarted {
+                image_name: current_process_name,
+                command_line: "".to_string(),
+                parent_pid: process_entry.th32ParentProcessID as u64,
+                pid: process_entry.th32ProcessID as u64,
+            };
+
+            if let Err(e) = all_processes.insert(&process) {
+                match e {
+                    super::process_monitor::ProcessErrors::DuplicatePid => {
+                        logger.log(LogLevel::Error, &format!("Duplicate PID found in process hashmap, did not insert. Pid in question: {}", process_entry.th32ProcessID));
+                    },
+                    _ => {
+                        logger.log(LogLevel::Error, "An unknown error occurred whilst trying to insert into process hashmap.");
+                    }
+                }
+            };
+
+            // continue enumerating
+            if !unsafe { Process32Next(snapshot, &mut process_entry) }.is_ok() {
+                break;
+            }
+        }
+    }
+
+    unsafe { let _ = CloseHandle(snapshot); };
+
+    all_processes
 }
