@@ -123,6 +123,6 @@ pub async fn driver_get_kernel_debug_messages() -> Result<String, ()> {
     };
 
     let state_string = serde_json::to_string(&state).unwrap();
-        
+
     Ok(state_string)
 }

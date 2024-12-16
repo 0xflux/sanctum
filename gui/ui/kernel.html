@@ -133,24 +133,51 @@
 					invoke('driver_get_kernel_debug_messages')
 					.then((response) => {
 						const data = JSON.parse(response);
+						
+						//
+						// Note: The below is commented out from a refactor going from KernelMessages which
+						// has now extended beyond basic / occasional messages, to instead handle an array
+						// of debug messages from the kernel. Leaving commented out as I may wish to revert
+						// in the future to using the KernelMessages / an alternate struct and it serves as a good
+						// prototype.
+						//
 
-						// early check if all fields are empty then wait until the next IPC
-						if (
-							(!data.messages || data.messages.length === 0) && 
-							(!data.process_creations || data.process_creations.length === 0)
-						) {
+						// // early check if all fields are empty then wait until the next IPC
+						// if (
+						// 	(!data.messages || data.messages.length === 0) && 
+						// 	(!data.process_creations || data.process_creations.length === 0)
+						// ) {
+						// 	return;
+						// }
+						
+						// const kernelOutput = document.getElementById('kernel-output');
+						// // const formattedMessage = formatMessage(data);
+
+						// // Create a new div for the message
+						// const messageDiv = document.createElement('div');
+						// messageDiv.innerHTML = formattedMessage.replace(/\n/g, '<br>'); 
+
+						// // Insert the new message at the top
+						// kernelOutput.prepend(messageDiv);
+
+
+
+						//
+						// New implementation: Checks for any null data for an early return, followed by adding the 
+						// messages to the debug log.
+						//
+
+						if (!data || !Array.isArray(data) || data.length === 0) {
 							return;
 						}
-						
 						const kernelOutput = document.getElementById('kernel-output');
-						const formattedMessage = formatMessage(data);
 
-						// Create a new div for the message
-						const messageDiv = document.createElement('div');
-						messageDiv.innerHTML = formattedMessage.replace(/\n/g, '<br>'); 
-
-						// Insert the new message at the top
-						kernelOutput.prepend(messageDiv);
+						// iterate over the array and add each item to the kernel output
+						data.forEach(item => {
+							const messageDiv = document.createElement('div');
+							messageDiv.innerHTML = item.toString().replace(/\n/g, '<br>'); 
+							kernelOutput.prepend(messageDiv);
+						});
 
 					}).catch((error) => console.error("Invoke error:", error));
 				}
