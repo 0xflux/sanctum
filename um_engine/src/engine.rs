@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{core::core::Core, gui_communication::ipc::UmIpc, usermode_api::UsermodeAPI, utils::log::Log};
+use crate::{core::core::Core, filescanner::FileScanner, gui_communication::ipc::UmIpc, usermode_api::UsermodeAPI, utils::log::Log};
 
 /// Engine is the central driver and control point for the Sanctum EDR. It is responsible for
 /// managing the core features of the EDR, including:
@@ -23,10 +23,18 @@ impl Engine {
         //
         let core = Arc::new(Core::from(60));
         let core_umipc = Arc::clone(&core);
-        
+
+        let scanner = FileScanner::new().await;
+        if let Err(e) = scanner {
+            panic!("[-] Failed to initialise scanner: {e}.");
+        }
+        let file_scanner = Arc::new(scanner.unwrap());
+
+        // clones
         let usermode_api = Arc::new(UsermodeAPI::new().await);
         let umapi_umipc = Arc::clone(&usermode_api);
         let umapi_core = Arc::clone(&usermode_api);
+        let file_scanner_clone = Arc::clone(&file_scanner);
 
         //
         // Spawn the core of the engine which will constantly talk to the driver and process any IO
@@ -43,10 +51,13 @@ impl Engine {
         // blocks indefinitely unless some error gets thrown up
         // todo review this; can this state ever crash the app?
         let gui_ipc_handle = tokio::spawn(async move {
-            let error = UmIpc::listen(umapi_umipc, core_umipc).await;
+            let error = UmIpc::listen(
+                umapi_umipc, 
+                core_umipc,
+                file_scanner_clone,
+            ).await;
+            
             let logger = Log::new();
-
-            // should this be a panic?
             logger.log(crate::utils::log::LogLevel::NearFatal, &format!("A near fatal error occurred in Engine::start() causing the application to crash. {:?}", error));
         });
 

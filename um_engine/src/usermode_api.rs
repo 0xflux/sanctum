@@ -1,15 +1,13 @@
 #![allow(dead_code)]
 
-use shared_std::{driver_manager::DriverState, file_scanner::{FileScannerState, ScanningLiveInfo}, settings::SanctumSettings};
+use shared_std::{driver_manager::DriverState, settings::SanctumSettings};
 use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
 use crate::{driver_manager::SanctumDriverManager, settings::SanctumSettingsImpl, utils::{env::get_logged_in_username, log::{Log, LogLevel}}};
-use crate::filescanner::FileScanner;
 use crate::settings::get_setting_paths;
 
 // todo - decommission UsermodeAPI and split any functionality into the modules.
 pub struct UsermodeAPI {
     pub driver_manager: Arc<Mutex<SanctumDriverManager>>,   // the interface for managing the driver
-    pub file_scanner: FileScanner,
     pub sanctum_settings: Arc<Mutex<SanctumSettings>>,
     pub log: Log, // for logging events
 }
@@ -32,70 +30,13 @@ impl UsermodeAPI {
 
         // driver manager
         let driver_manager = Arc::new(Mutex::new(SanctumDriverManager::new()));
-
-        // scanner module
-        let scanner = FileScanner::new().await;
-        if let Err(e) = scanner {
-            panic!("[-] Failed to initialise scanner: {e}.");
-        }
-        let file_scanner = scanner.unwrap();
+        
 
         UsermodeAPI{
             driver_manager,
-            file_scanner,
             sanctum_settings,
             log,
         }
-    }
-
-
-    /// Public entrypoint for scanning, taking in a target file / folder, and the scan type.
-    /// 
-    /// This function ensures all state is accurate for whether a scan is in progress etc.
-    /// 
-    /// # Returns
-    /// 
-    /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
-    /// allowing the function to conduct different types of scan. This will need checking in the calling function.
-    pub fn scanner_start_scan(&self, target: Vec<PathBuf>) -> FileScannerState {
-        
-        // check whether a scan is active
-        if self.file_scanner.is_scanning() {
-            return FileScannerState::Scanning;
-        }
-
-        self.file_scanner.scan_started(); // update state
-
-        // send the job for a scan
-        let result = self.file_scanner.begin_scan(target);
-
-        self.file_scanner.end_scan(); // update state
-
-        let result = match result {
-            Ok(state) => state,
-            Err(e) => {
-                FileScannerState::FinishedWithError(e.to_string())
-            },
-        };
-
-        result
-    }
-
-
-    /// Instructs the scanner to cancel its scan, returning information about the results
-    pub fn scanner_cancel_scan(&self) {
-        self.file_scanner.cancel_scan();
-    }
-
-
-    /// Gets the state of the scanner module
-    pub fn scanner_get_state(&self) -> FileScannerState {
-        self.file_scanner.get_state()
-    }
-
-
-    pub fn scanner_get_scan_data(&self) -> ScanningLiveInfo {
-        self.file_scanner.scanning_info.lock().unwrap().clone()
     }
 
 

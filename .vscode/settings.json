@@ -46,6 +46,7 @@
         "reqwest",
         "rustc",
         "SANC",
+        "serde",
         "SNAPALL",
         "SPSVCINST",
         "symlnk",

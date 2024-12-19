@@ -95,23 +95,7 @@ impl FileScanner {
             }
         )
     }
-
-
-    /// Cancels the current scan
-    pub fn cancel_scan(&self) -> Option<ScanningLiveInfo>{
-        let mut lock = self.state.lock().unwrap();
-
-        // check we are scanning, if not return
-        if *lock == FileScannerState::Scanning {
-            *lock = FileScannerState::Cancelled; // update state
-            let sli = self.scanning_info.lock().unwrap();
-
-            return Some(sli.clone());
-        } 
-
-        None
-    }
-
+    
 
     pub fn scan_started(&self) {
         let mut lock = self.state.lock().unwrap();
@@ -390,9 +374,64 @@ impl FileScanner {
     }
 
 
+    /// Public entrypoint for scanning, taking in a target file / folder, and the scan type.
+    /// 
+    /// This function ensures all state is accurate for whether a scan is in progress etc.
+    /// 
+    /// # Returns
+    /// 
+    /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
+    /// allowing the function to conduct different types of scan. This will need checking in the calling function.
+    pub fn start_scan(&self, target: Vec<PathBuf>) -> FileScannerState {
+        
+        // check whether a scan is active
+        if self.is_scanning() {
+            return FileScannerState::Scanning;
+        }
+
+        self.scan_started(); // update state
+
+        // send the job for a scan
+        let result = self.begin_scan(target);
+
+        self.end_scan(); // update state
+
+        let result = match result {
+            Ok(state) => state,
+            Err(e) => {
+                FileScannerState::FinishedWithError(e.to_string())
+            },
+        };
+
+        result
+    }
+
+
+    /// Instructs the scanner to cancel its scan, returning information about the results
+    pub fn cancel_scan(&self) -> Option<ScanningLiveInfo> {
+        let mut lock = self.state.lock().unwrap();
+
+        // check we are scanning, if not return
+        if *lock == FileScannerState::Scanning {
+            *lock = FileScannerState::Cancelled; // update state
+            let sli = self.scanning_info.lock().unwrap();
+
+            return Some(sli.clone());
+        }
+
+        None
+    }
+
+
+    /// Gets the state of the scanner
     pub fn get_state(&self) -> FileScannerState {
         let lock = self.state.lock().unwrap();
         lock.clone()
+    }
+
+
+    pub fn scanner_get_scan_data(&self) -> ScanningLiveInfo {
+        self.scanning_info.lock().unwrap().clone()
     }
 
 }

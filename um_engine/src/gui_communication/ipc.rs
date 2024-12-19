@@ -13,14 +13,18 @@ use serde_json::{from_slice, to_value, to_vec, Value};
 use shared_no_std::{constants::PIPE_NAME, ipc::{CommandRequest, CommandResponse}};
 use shared_std::settings::SanctumSettings;
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
-use crate::{core::core::Core, usermode_api::UsermodeAPI, settings::SanctumSettingsImpl, utils::log::{Log, LogLevel}}; 
+use crate::{core::core::Core, filescanner::{self, FileScanner}, settings::SanctumSettingsImpl, usermode_api::UsermodeAPI, utils::log::{Log, LogLevel}}; 
 
 /// An interface for the usermode IPC server
 pub struct UmIpc{}
 
 impl UmIpc {
 
-    pub async fn listen(engine: Arc<UsermodeAPI>, core: Arc<Core>) -> Result<(), Box<dyn std::error::Error>>{
+    pub async fn listen(
+        engine: Arc<UsermodeAPI>, 
+        core: Arc<Core>,
+        file_scanner: Arc<FileScanner>
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let logger = Log::new();
         logger.log(LogLevel::Info, &format!("Trying to start IPC server at {}...", PIPE_NAME));
 
@@ -45,6 +49,7 @@ impl UmIpc {
     
             let engine_clone = Arc::clone(&engine);
             let core_clone = Arc::clone(&core);
+            let scanner_clone = Arc::clone(&file_scanner);
     
             tokio::spawn(async move {
                 let mut buffer = vec![0; 1024];
@@ -64,7 +69,12 @@ impl UmIpc {
                                 //
                                 // Handle the incoming IPC request here
                                 //
-                                if let Some(response) = handle_ipc(request, engine_clone, core_clone).await {
+                                if let Some(response) = handle_ipc(
+                                    request, 
+                                    engine_clone, 
+                                    core_clone,
+                                    scanner_clone,
+                                ).await {
                                     //
                                     // Serialise and send the response back to the client
                                     //
@@ -107,7 +117,12 @@ impl UmIpc {
 /// None if there is to be no response to the IPC - will usually be the case in respect of the driver sending a message. 
 /// As the IPC channel is a 'one shot' from the driver implemented natively, the pipe will be closed on receipt in this function.
 /// In the case of a Tokio IPC pipe, a response can be sent, in which case, it will be serialised to a Value and sent wrapped in a Some.
-pub async fn handle_ipc(request: CommandRequest, engine_clone: Arc<UsermodeAPI>, core: Arc<Core>) -> Option<Value> {
+pub async fn handle_ipc(
+    request: CommandRequest, 
+    engine_clone: Arc<UsermodeAPI>, 
+    core: Arc<Core>,
+    file_scanner: Arc<FileScanner>,
+) -> Option<Value> {
     let response: Value = match request.command.as_str() {
 
         //
@@ -115,19 +130,19 @@ pub async fn handle_ipc(request: CommandRequest, engine_clone: Arc<UsermodeAPI>,
         //
 
         "scanner_check_page_state" => {
-            to_value(engine_clone.scanner_get_state()).unwrap()
+            to_value(file_scanner.get_state()).unwrap()
         },
         "scanner_get_scan_stats" => {
-            to_value(engine_clone.scanner_get_scan_data()).unwrap()
+            to_value(file_scanner.scanner_get_scan_data()).unwrap()
         },
         "scanner_cancel_scan" => {
-            engine_clone.scanner_cancel_scan();
+            file_scanner.cancel_scan();
             to_value("").unwrap()
         },
         "scanner_start_folder_scan" => {
             if let Some(args) = request.args {
                 let target: Vec<PathBuf> = serde_json::from_value(args).unwrap();
-                to_value(engine_clone.scanner_start_scan(target)).unwrap()
+                to_value(file_scanner.start_scan(target)).unwrap()
             } else {
                 to_value(CommandResponse {
                     status: "error".to_string(),
