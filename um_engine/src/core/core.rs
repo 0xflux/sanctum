@@ -4,7 +4,7 @@ use shared_no_std::driver_ipc::ProcessStarted;
 use tokio::{sync::Mutex, time::sleep};
 use windows::Win32::{Foundation::{CloseHandle, GetLastError}, System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPALL}};
 
-use crate::{engine::UmEngine, utils::log::{Log, LogLevel}};
+use crate::{usermode_api::UsermodeAPI, utils::log::{Log, LogLevel}};
 
 use super::process_monitor::ProcessMonitor;
 
@@ -21,7 +21,7 @@ use super::process_monitor::ProcessMonitor;
 #[derive(Debug, Default)]
 pub struct Core {
     driver_poll_rate: u64,
-    driver_dbg_message_cache: Vec<String>,
+    driver_dbg_message_cache: Mutex<Vec<String>>,
 }
 
 
@@ -37,7 +37,7 @@ impl Core {
     }
 
     /// Starts the core of the usermode engine; kicking off the frequent polling of the driver, and conducts relevant decision making
-    pub async fn start_core(core: Arc<Mutex<Self>>, engine: Arc<UmEngine>) -> ! {
+    pub async fn start_core(&self, engine: Arc<UsermodeAPI>) -> ! {
 
         let mut processes = ProcessMonitor::new();
 
@@ -91,10 +91,10 @@ impl Core {
 
                 // cache messages
                 {
-                    let mut core_lock = core.lock().await;
-                    println!("Driver messages: {:?}", core_lock.driver_dbg_message_cache);
+                    let mut message_cache = self.driver_dbg_message_cache.lock().await;
+                    println!("Driver messages: {:?}", message_cache);
                     if !driver_messages.messages.is_empty() {
-                        core_lock.driver_dbg_message_cache.append(&mut driver_messages.messages);
+                        message_cache.append(&mut driver_messages.messages);
                     }
                 }
 
@@ -111,10 +111,7 @@ impl Core {
                 */
             }
 
-            {
-                let core_lock = core.lock().await;
-                sleep(Duration::from_millis(core_lock.driver_poll_rate)).await;
-            }
+            sleep(Duration::from_millis(self.driver_poll_rate)).await;
             
         }
     }
@@ -126,15 +123,15 @@ impl Core {
     /// 
     /// If there are no messages cached, None will be returned. Otherwise, a vector of the messages
     /// will be returned to the caller.
-    pub async fn get_cached_driver_messages(core: Arc<Mutex<Self>>) -> Option<Vec<String>> {
-        let mut core_lock = core.lock().await;
+    pub async fn get_cached_driver_messages(&self) -> Option<Vec<String>> {
+        let mut msg_lock = self.driver_dbg_message_cache.lock().await;
 
-        if core_lock.driver_dbg_message_cache.is_empty() {
+        if msg_lock.is_empty() {
             return None;
         }
 
-        let tmp = core_lock.driver_dbg_message_cache.clone();
-        core_lock.driver_dbg_message_cache.clear();
+        let tmp = msg_lock.clone();
+        msg_lock.clear();
         
         Some(tmp)
     }

@@ -50,6 +50,8 @@
         "SPSVCINST",
         "symlnk",
         "Toolhelp",
+        "umapi",
+        "umipc",
         "uncategorized",
         "usermode"
     ]

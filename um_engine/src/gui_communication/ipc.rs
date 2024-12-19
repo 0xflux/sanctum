@@ -12,15 +12,15 @@ use std::{path::PathBuf, sync::Arc};
 use serde_json::{from_slice, to_value, to_vec, Value};
 use shared_no_std::{constants::PIPE_NAME, ipc::{CommandRequest, CommandResponse}};
 use shared_std::settings::SanctumSettings;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}, sync::Mutex};
-use crate::{core::core::Core, engine::UmEngine, settings::SanctumSettingsImpl, utils::log::{Log, LogLevel}}; 
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::windows::named_pipe::{PipeMode, ServerOptions}};
+use crate::{core::core::Core, usermode_api::UsermodeAPI, settings::SanctumSettingsImpl, utils::log::{Log, LogLevel}}; 
 
 /// An interface for the usermode IPC server
 pub struct UmIpc{}
 
 impl UmIpc {
 
-    pub async fn listen(engine: Arc<UmEngine>, core: Arc<Mutex<Core>>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn listen(engine: Arc<UsermodeAPI>, core: Arc<Core>) -> Result<(), Box<dyn std::error::Error>>{
         let logger = Log::new();
         logger.log(LogLevel::Info, &format!("Trying to start IPC server at {}...", PIPE_NAME));
 
@@ -107,7 +107,7 @@ impl UmIpc {
 /// None if there is to be no response to the IPC - will usually be the case in respect of the driver sending a message. 
 /// As the IPC channel is a 'one shot' from the driver implemented natively, the pipe will be closed on receipt in this function.
 /// In the case of a Tokio IPC pipe, a response can be sent, in which case, it will be serialised to a Value and sent wrapped in a Some.
-pub async fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>, core: Arc<Mutex<Core>>) -> Option<Value> {
+pub async fn handle_ipc(request: CommandRequest, engine_clone: Arc<UsermodeAPI>, core: Arc<Core>) -> Option<Value> {
     let response: Value = match request.command.as_str() {
 
         //
@@ -192,7 +192,7 @@ pub async fn handle_ipc(request: CommandRequest, engine_clone: Arc<UmEngine>, co
         },
         "driver_collect_knl_dbg_msg" => {
             to_value({
-                Core::get_cached_driver_messages(core).await
+                core.get_cached_driver_messages().await
             }).unwrap()
         }
 

@@ -16,6 +16,7 @@ pub enum LogLevel {
     Warning,
     Success,
     Error,
+    NearFatal
 }
 
 impl Log {
@@ -80,6 +81,7 @@ impl Log {
             LogLevel::Warning => println!("[w] {}", msg),
             LogLevel::Success => println!("[+] {}", msg),
             LogLevel::Error => println!("[e] {}", msg),
+            LogLevel::NearFatal => println!("[!] {}", msg),
         }
     }
 }

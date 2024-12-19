@@ -1,179 +1,59 @@
-#![allow(dead_code)]
+use std::sync::Arc;
 
-use shared_std::{driver_manager::DriverState, file_scanner::{FileScannerState, ScanningLiveInfo}, settings::SanctumSettings};
-use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
-use crate::{driver_manager::SanctumDriverManager, settings::SanctumSettingsImpl, utils::{env::get_logged_in_username, log::{Log, LogLevel}}};
-use crate::filescanner::FileScanner;
-use crate::settings::get_setting_paths;
+use crate::{core::core::Core, gui_communication::ipc::UmIpc, usermode_api::UsermodeAPI, utils::log::Log};
 
-/// The public API for the usermode engine which will run inside the Tauri GUI application.
-/// At present this interface does not hold state, and is used as a singleton in order to instruct the 
-/// engine to conduct actions on behalf of the user.
+/// Engine is the central driver and control point for the Sanctum EDR. It is responsible for
+/// managing the core features of the EDR, including:
 /// 
-/// This interface also blocks, and is not async yet but the plan will be either to make it async or
-/// run certain functions in their own threads.
-/// 
-/// # API naming conventions
-/// 
-/// - scanner_ => Any functionality for file scanning etc shall be prefixed with scanner_
-/// - driver_ => Any functionality for driver interaction shall be prefixed with driver_
-pub struct UmEngine {
-    pub driver_manager: Arc<Mutex<SanctumDriverManager>>,   // the interface for managing the driver
-    pub file_scanner: FileScanner,
-    pub sanctum_settings: Arc<Mutex<SanctumSettings>>,
-    pub log: Log, // for logging events
-}
+/// - Communication with the driver
+/// - Communication with the GUI
+/// - Decision making
+/// - Scanning
+/// - Process monitoring
+/// - File monitoring
+/// - Driver management
+pub struct Engine {}
 
-impl UmEngine {
-
-    /// Initialises the usermode engine, ensuring the driver file exists in the image directory.
-    pub async fn new() -> Self {
-
-        let log = Log::new();
-
-        log.log(LogLevel::Info, "Sanctum usermode engine staring..");
-
+impl Engine {
+    /// Start the engine
+    pub async fn start() -> Result<(), Box<dyn std::error::Error>> {
         //
-        // Config setup
+        // Start by instantiating the elements we will be using in the engine.
+        // Once created; clone them as Arcs to share across the threads
         //
-
-         // settings and environment
-         let sanctum_settings = Arc::new(Mutex::new(SanctumSettings::load()));
-
-        // driver manager
-        let driver_manager = Arc::new(Mutex::new(SanctumDriverManager::new()));
-
-        // scanner module
-        let scanner = FileScanner::new().await;
-        if let Err(e) = scanner {
-            panic!("[-] Failed to initialise scanner: {e}.");
-        }
-        let file_scanner = scanner.unwrap();
-
-        UmEngine{
-            driver_manager,
-            file_scanner,
-            sanctum_settings,
-            log,
-        }
-    }
-
-
-    /// Public entrypoint for scanning, taking in a target file / folder, and the scan type.
-    /// 
-    /// This function ensures all state is accurate for whether a scan is in progress etc.
-    /// 
-    /// # Returns
-    /// 
-    /// The function will return the enum ScanResult which 'genericifies' the return type to give flexibility to 
-    /// allowing the function to conduct different types of scan. This will need checking in the calling function.
-    pub fn scanner_start_scan(&self, target: Vec<PathBuf>) -> FileScannerState {
+        let core = Arc::new(Core::from(60));
+        let core_umipc = Arc::clone(&core);
         
-        // check whether a scan is active
-        if self.file_scanner.is_scanning() {
-            return FileScannerState::Scanning;
-        }
+        let usermode_api = Arc::new(UsermodeAPI::new().await);
+        let umapi_umipc = Arc::clone(&usermode_api);
+        let umapi_core = Arc::clone(&usermode_api);
 
-        self.file_scanner.scan_started(); // update state
+        //
+        // Spawn the core of the engine which will constantly talk to the driver and process any IO
+        // from / to the driver and other working parts of the EDR, except for the GUI which will
+        // be handled below.
+        //
+        // The `core` is passed into the start method as an Arc<Mutex<>> so we can share its data with
+        // other threads from the engine / usermode IPC loops.
+        //
+        let core_handle = tokio::spawn(async move {
+            core.start_core(umapi_core).await;
+        });
 
-        // send the job for a scan
-        let result = self.file_scanner.begin_scan(target);
+        // blocks indefinitely unless some error gets thrown up
+        // todo review this; can this state ever crash the app?
+        let gui_ipc_handle = tokio::spawn(async move {
+            let error = UmIpc::listen(umapi_umipc, core_umipc).await;
+            let logger = Log::new();
 
-        self.file_scanner.end_scan(); // update state
+            // should this be a panic?
+            logger.log(crate::utils::log::LogLevel::NearFatal, &format!("A near fatal error occurred in Engine::start() causing the application to crash. {:?}", error));
+        });
 
-        let result = match result {
-            Ok(state) => state,
-            Err(e) => {
-                FileScannerState::FinishedWithError(e.to_string())
-            },
-        };
-
-        result
-    }
-
-
-    /// Instructs the scanner to cancel its scan, returning information about the results
-    pub fn scanner_cancel_scan(&self) {
-        self.file_scanner.cancel_scan();
-    }
-
-
-    /// Gets the state of the scanner module
-    pub fn scanner_get_state(&self) -> FileScannerState {
-        self.file_scanner.get_state()
-    }
-
-
-    pub fn scanner_get_scan_data(&self) -> ScanningLiveInfo {
-        self.file_scanner.scanning_info.lock().unwrap().clone()
-    }
-
-
-    //
-    // Settings
-    // 
-
-    pub fn settings_get_common_scan_areas(&self) -> Vec<PathBuf> {
-        let lock = self.sanctum_settings.lock().unwrap();
-        lock.common_scan_areas.clone()
-    }
-
-    pub fn settings_update_settings(&self, settings: SanctumSettings) {
-        // change the live state
-        let mut lock = self.sanctum_settings.lock().unwrap();
-        *lock = settings.clone();
-
-        // write the new file
-        let settings_str = serde_json::to_string(&settings).unwrap();
-        let path = get_setting_paths(&get_logged_in_username().unwrap()).1;
-        fs::write(path, settings_str).unwrap();
-    }
-
-
-    //
-    // Driver controls
-    //
-
-    /// Public API for installing the driver on the host machine
-    /// 
-    /// # Returns
-    /// 
-    /// The state of the driver after initialisation
-    pub fn driver_install_driver(&self) -> DriverState {
-        let mut lock = self.driver_manager.lock().unwrap();
-        lock.install_driver();
-        lock.get_state()
-    }
-    
-    pub fn driver_uninstall_driver(&self) -> DriverState {
-        let mut lock = self.driver_manager.lock().unwrap();
-        lock.uninstall_driver();
-        lock.get_state()
-    }
-
-    pub fn driver_start_driver(&self) -> DriverState {
-        let mut lock = self.driver_manager.lock().unwrap();
-        lock.start_driver();
-        lock.get_state()
-    }
-
-    pub fn driver_stop_driver(&self) -> DriverState {
-        let mut lock = self.driver_manager.lock().unwrap();
-        lock.stop_driver();
-        lock.get_state()
-    }
-
-    pub fn driver_get_state(&self) -> DriverState {
-        let lock = self.driver_manager.lock().unwrap();
-        lock.get_state()
-    }
-
-
-    //
-    // IOCTLS
-    //
-    pub fn ioctl_ping_driver(&self) -> String {
-        let mut lock = self.driver_manager.lock().unwrap();
-        lock.ioctl_ping_driver()
+        // If one thread returns out an error of the runtime; we want to return out of the engine and
+        // halt
+        tokio::try_join!(core_handle, gui_ipc_handle)?;
+        
+        Ok(())
     }
 }
